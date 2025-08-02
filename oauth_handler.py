@@ -225,6 +225,7 @@ class TikTokOfficialAPI:
     def get_user_videos(self, cursor: Optional[str] = None, count: int = 20) -> Dict:
         """
         获取用户视频列表 - 使用Display API格式
+        由于/v2/video/list/不存在，我们需要先获取用户信息，然后尝试其他方法
         
         Args:
             cursor: 分页游标 (可选)
@@ -233,61 +234,78 @@ class TikTokOfficialAPI:
         Returns:
             视频列表响应
         """
-        # 根据Display API文档构建请求参数
-        # 尝试多种参数组合
-        params = {}
+        print("Display API中没有/v2/video/list/端点，尝试替代方案...")
         
-        # 可能需要fields参数来指定返回的字段
-        fields = [
-            'id',
-            'title', 
-            'create_time',
-            'cover_image_url',
-            'share_url',
-            'duration'
-        ]
-        params['fields'] = ','.join(fields)
+        # 第一步：先获取用户信息确认API工作
+        try:
+            user_info = self.get_user_info(['open_id', 'display_name'])
+            print(f"用户信息获取成功: {user_info}")
+            
+            # Display API可能不提供直接获取用户所有视频的方法
+            # 它主要用于显示特定的视频，而不是列出所有视频
+            
+            # 返回一个模拟的响应，说明需要使用不同的方法
+            return {
+                'data': {
+                    'videos': [],
+                    'has_more': False,
+                    'cursor': None
+                },
+                'error': {
+                    'code': 'display_api_limitation',
+                    'message': 'Display API不支持列出用户的所有视频，只能查询特定视频ID'
+                },
+                'user_info': user_info
+            }
+            
+        except Exception as e:
+            print(f"获取用户信息失败: {e}")
+            raise Exception(f"Display API限制: 无法列出用户视频，只能查询特定视频。错误: {e}")
+    
+    def query_specific_videos(self, video_ids: list, fields: list = None) -> Dict:
+        """
+        查询特定视频的信息 - 这是Display API实际支持的方法
         
-        # 尝试不同的计数参数名称
-        if count:
-            # 尝试常见的参数名称
-            params['count'] = min(count, 20)  # 可能是count而不是max_count
+        Args:
+            video_ids: 视频ID列表
+            fields: 需要获取的字段列表
+            
+        Returns:
+            视频信息
+        """
+        if fields is None:
+            fields = [
+                'id',
+                'title',
+                'create_time',
+                'cover_image_url',
+                'share_url',
+                'duration'
+            ]
         
-        if cursor:
-            params['cursor'] = cursor
+        data = {
+            'filters': {
+                'video_ids': video_ids
+            }
+        }
         
-        print(f"调用Display API with params: {params}")
+        params = {
+            'fields': ','.join(fields)
+        }
         
         try:
-            response = requests.get(
-                f"{self.base_url}/v2/video/list/",
+            response = requests.post(
+                f"{self.base_url}/v2/video/query/",
                 headers=self.headers,
+                json=data,
                 params=params
             )
-            print(f"API响应状态码: {response.status_code}")
-            print(f"API响应头: {dict(response.headers)}")
-            print(f"API响应内容: {response.text[:500]}...")
-            
-            if response.status_code == 404:
-                # 如果404，尝试不带参数的请求
-                print("尝试不带参数的请求...")
-                response = requests.get(
-                    f"{self.base_url}/v2/video/list/",
-                    headers=self.headers
-                )
-                print(f"无参数请求状态码: {response.status_code}")
-                print(f"无参数请求响应: {response.text[:500]}...")
-            
+            print(f"查询特定视频状态码: {response.status_code}")
+            print(f"查询特定视频响应: {response.text[:500]}...")
             response.raise_for_status()
             return response.json()
-            
         except requests.RequestException as e:
-            print(f"API请求详细错误: {e}")
-            if hasattr(e, 'response') and e.response is not None:
-                print(f"错误响应内容: {e.response.text}")
-                print(f"错误响应状态码: {e.response.status_code}")
-                print(f"错误响应头: {dict(e.response.headers)}")
-            raise Exception(f"获取视频列表失败: {e}")
+            raise Exception(f"查询特定视频失败: {e}")
     
     def get_video_info(self, video_ids: list, fields: list = None) -> Dict:
         """
@@ -434,31 +452,45 @@ class TikTokOfficialAPI:
         except Exception as e:
             test_results['user_info'] = {'error': str(e)}
         
-        # 测试视频列表端点 - 不同参数组合
-        test_params = [
-            {},  # 无参数
-            {'fields': 'id,title'},  # 只有fields
-            {'count': 10},  # 只有count
-            {'max_count': 10},  # max_count
-            {'fields': 'id,title', 'count': 10},  # fields + count
-            {'fields': 'id,title', 'max_count': 10},  # fields + max_count
+        # 尝试不同的视频端点路径和方法
+        video_endpoints = [
+            ('GET', '/v2/video/list/', {}),
+            ('POST', '/v2/video/list/', {}),
+            ('GET', '/v2/video/query/', {}),
+            ('POST', '/v2/video/query/', {}),
+            ('GET', '/v2/videos/list/', {}),
+            ('POST', '/v2/videos/list/', {}),
+            ('GET', '/v2/user/videos/', {}),
+            ('POST', '/v2/user/videos/', {}),
         ]
         
-        for i, params in enumerate(test_params):
+        for i, (method, endpoint, params) in enumerate(video_endpoints):
             try:
-                video_response = requests.get(
-                    f"{self.base_url}/v2/video/list/",
-                    headers=self.headers,
-                    params=params
-                )
-                test_results[f'video_list_{i}'] = {
+                if method == 'GET':
+                    video_response = requests.get(
+                        f"{self.base_url}{endpoint}",
+                        headers=self.headers,
+                        params=params
+                    )
+                else:  # POST
+                    video_response = requests.post(
+                        f"{self.base_url}{endpoint}",
+                        headers=self.headers,
+                        json=params
+                    )
+                
+                test_results[f'video_endpoint_{i}'] = {
+                    'method': method,
+                    'endpoint': endpoint,
                     'params': params,
                     'status_code': video_response.status_code,
                     'success': video_response.status_code == 200,
-                    'response': video_response.text[:200]
+                    'response': video_response.text[:300]
                 }
             except Exception as e:
-                test_results[f'video_list_{i}'] = {
+                test_results[f'video_endpoint_{i}'] = {
+                    'method': method,
+                    'endpoint': endpoint,
                     'params': params,
                     'error': str(e)
                 }

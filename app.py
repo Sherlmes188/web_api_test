@@ -126,14 +126,18 @@ def update_data():
                         videos_response = api.get_user_videos(count=20)
                         
                         # Display API的响应格式: {"data": {"videos": [...], "cursor": ..., "has_more": bool}, "error": {...}}
-                        if videos_response.get('data') and videos_response['data'].get('videos'):
+                        if videos_response.get('error', {}).get('code') == 'display_api_limitation':
+                            current_data = generate_display_api_demo_data()
+                            message = "TikTok Display API限制：只能查询特定视频，无法列出所有视频。当前显示演示数据以展示功能。"
+                            status = 'api_limitation'
+                        elif videos_response.get('data') and videos_response['data'].get('videos'):
                             raw_videos = videos_response['data']['videos']
                             current_data = api.process_video_analytics(raw_videos)
                             message = f"成功获取 {len(current_data)} 个视频数据"
                             status = 'success'
                         else:
                             current_data = []
-                            message = "暂无视频数据"
+                            message = "暂无视频数据或API返回为空"
                             status = 'no_data'
                     except Exception as e:
                         print(f"获取官方API数据失败: {e}")
@@ -740,6 +744,57 @@ def generate_sample_data_with_note(note="模拟数据"):
     for item in data:
         item['product'] = f"{item['product']} ({note})"
     return data
+
+def generate_display_api_demo_data():
+    """生成Display API限制情况下的演示数据"""
+    import datetime
+    import random
+    
+    demo_videos = []
+    
+    # 模拟一些TikTok风格的视频数据
+    sample_descriptions = [
+        "🔥 TikTok Display API 演示数据 #API #开发 #科技",
+        "💡 实际使用时需要video_id才能查询 #TikTok #DisplayAPI", 
+        "🚀 可考虑使用Research API获取完整数据 #研究 #数据分析",
+        "⚠️ Display API主要用于显示特定视频 #限制 #说明",
+        "📊 当前为演示模式，展示仪表板功能 #演示 #Dashboard"
+    ]
+    
+    for i in range(5):
+        # 模拟视频数据
+        publish_time = datetime.datetime.now() - datetime.timedelta(days=random.randint(1, 30))
+        views = random.randint(1000, 50000)
+        likes = random.randint(50, int(views * 0.1))
+        comments = random.randint(5, int(likes * 0.3))
+        shares = random.randint(1, int(likes * 0.1))
+        duration = random.randint(15, 60)
+        
+        engagement_rate = ((likes + comments + shares) / views) * 100
+        avg_watch_time = duration * (0.4 + random.random() * 0.4)
+        completion_rate = min(95, 30 + engagement_rate * 3)
+        
+        video_data = {
+            'video_id': f'demo_video_{i+1}',
+            'description': sample_descriptions[i],
+            'author': 'Display API 演示',
+            'publish_time': publish_time,
+            'views': views,
+            'likes': likes,
+            'comments': comments,
+            'shares': shares,
+            'duration': duration,
+            'engagement_rate': round(engagement_rate, 2),
+            'avg_watch_time': round(avg_watch_time, 1),
+            'completion_rate': round(completion_rate, 1),
+            'bounce_rate': round(max(1.0, 8.0 - engagement_rate/3), 2),
+            'share_url': f'https://www.tiktok.com/@demo/video/demo_{i+1}',
+            'cover_image': 'https://via.placeholder.com/300x400/FF0050/FFFFFF?text=Display+API+Demo'
+        }
+        
+        demo_videos.append(video_data)
+    
+    return demo_videos
 
 def schedule_updates():
     """定时任务调度器"""

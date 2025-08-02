@@ -547,49 +547,59 @@ class TikTokAnalyticsDashboard {
     }
 
     updateStatusMessage(status, message) {
-        // 更新状态消息显示
-        const statusElement = document.querySelector('.navbar .badge');
-        if (statusElement) {
-            // 更新API状态显示
-            switch(status) {
-                case 'need_config':
-                    statusElement.textContent = '需要配置';
-                    statusElement.className = 'badge bg-warning';
-                    break;
-                case 'need_auth':
-                    statusElement.textContent = '需要授权';
-                    statusElement.className = 'badge bg-info';
-                    // 自动弹出授权确认框
-                    this.showAuthorizationModal();
-                    break;
-                case 'success':
-                    statusElement.textContent = '已连接';
-                    statusElement.className = 'badge bg-success';
-                    break;
-                case 'error':
-                    statusElement.textContent = '错误';
-                    statusElement.className = 'badge bg-danger';
-                    break;
-                default:
-                    statusElement.textContent = '未知';
-                    statusElement.className = 'badge bg-secondary';
-            }
+        const statusAlert = document.getElementById('statusAlert');
+        const statusMessage = document.getElementById('statusMessage');
+        
+        if (!statusAlert || !statusMessage) return;
+        
+        let alertClass = 'alert-info';
+        let showConfigButton = false;
+        
+        switch(status) {
+            case 'need_config':
+                alertClass = 'alert-warning';
+                showConfigButton = true;
+                break;
+            case 'need_auth':
+                alertClass = 'alert-warning';
+                break;
+            case 'success':
+                alertClass = 'alert-success';
+                break;
+            case 'error':
+                alertClass = 'alert-danger';
+                break;
+            case 'api_limitation':
+                alertClass = 'alert-info';
+                message = message + ' 当前显示演示数据。';
+                break;
+            case 'no_data':
+                alertClass = 'alert-secondary';
+                break;
+            case 'demo':
+                alertClass = 'alert-info';
+                showConfigButton = true;
+                break;
         }
         
-        // 显示授权按钮
-        const authBtn = document.getElementById('authBtn');
-        if (authBtn) {
-            if (status === 'need_auth') {
-                authBtn.style.display = 'inline-block';
-            } else {
-                authBtn.style.display = 'none';
-            }
+        // 更新alert样式
+        statusAlert.className = `alert ${alertClass}`;
+        statusMessage.textContent = message;
+        
+        // 显示或隐藏配置按钮
+        const configButton = statusAlert.querySelector('.btn-outline-primary');
+        if (configButton) {
+            configButton.style.display = showConfigButton ? 'block' : 'none';
         }
         
-        // 如果有消息，可以在控制台显示
-        if (message) {
-            console.log('Status message:', message);
+        // 显示状态消息
+        if (status !== 'success' || (status === 'success' && this.currentData.length === 0)) {
+            statusAlert.style.display = 'block';
+        } else {
+            statusAlert.style.display = 'none';
         }
+        
+        console.log('Status message:', message);
     }
     
     showAuthorizationModal() {
