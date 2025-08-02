@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TikTok视频数据分析面板</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <!-- 导航栏 -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary sticky-top">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="#">
+                <i class="fab fa-tiktok me-2"></i>
+                TikTok数据分析面板
+            </a>
+            <div class="navbar-nav ms-auto">
+                <button id="authBtn" class="btn btn-outline-warning me-2" style="display: none;">
+                    <i class="fas fa-lock"></i> 授权TikTok
+                </button>
+                <button id="refreshBtn" class="btn btn-outline-light me-2">
+                    <i class="fas fa-sync-alt"></i> 刷新数据
+                </button>
+                <span id="connectionStatus" class="badge bg-success">
+                    <i class="fas fa-circle"></i> 已连接
+                </span>
+                <span id="apiStatus" class="badge bg-info ms-2">
+                    <i class="fas fa-api"></i> <span id="apiType">检测中...</span>
+                </span>
+            </div>
+        </div>
+    </nav>
+
+    <!-- 主内容区域 -->
+    <div class="container-fluid py-4">
+        <!-- 统计卡片 -->
+        <div class="row mb-4">
+            <div class="col-md-3">
+                <div class="card stats-card bg-primary text-white">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between">
+                            <div>
+                                <h4 id="totalVideos">0</h4>
+                                <p class="mb-0">总视频数</p>
+                            </div>
+                            <div class="align-self-center">
+                                <i class="fas fa-video fa-2x"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card stats-card bg-success text-white">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between">
+                            <div>
+                                <h4 id="totalViews">0</h4>
+                                <p class="mb-0">总观看数</p>
+                            </div>
+                            <div class="align-self-center">
+                                <i class="fas fa-eye fa-2x"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card stats-card bg-warning text-white">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between">
+                            <div>
+                                <h4 id="avgCompletionRate">0%</h4>
+                                <p class="mb-0">平均完播率</p>
+                            </div>
+                            <div class="align-self-center">
+                                <i class="fas fa-chart-line fa-2x"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card stats-card bg-info text-white">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between">
+                            <div>
+                                <h4 id="totalFollowers">0</h4>
+                                <p class="mb-0">新增关注</p>
+                            </div>
+                            <div class="align-self-center">
+                                <i class="fas fa-users fa-2x"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 数据表格 -->
+        <div class="card">
+            <div class="card-header bg-light">
+                <div class="row align-items-center">
+                    <div class="col">
+                        <h5 class="mb-0">
+                            <i class="fas fa-table me-2"></i>
+                            视频数据详情
+                        </h5>
+                    </div>
+                    <div class="col-auto">
+                        <span id="lastUpdated" class="text-muted small">
+                            最后更新: --
+                        </span>
+                    </div>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0" id="dataTable">
+                        <thead class="table-dark">
+                            <tr>
+                                <th scope="col">视频链接</th>
+                                <th scope="col">产品</th>
+                                <th scope="col">视频发布服务</th>
+                                <th scope="col">视频发布日期</th>
+                                <th scope="col">Views</th>
+                                <th scope="col">人均观看时长</th>
+                                <th scope="col">New Followers</th>
+                                <th scope="col">完播率时间</th>
+                                <th scope="col">跳出率</th>
+                                <th scope="col">观看时长</th>
+                                <th scope="col">GMV MAX各活动</th>
+                                <th scope="col">视频时长</th>
+                                <th scope="col">状态</th>
+                            </tr>
+                        </thead>
+                        <tbody id="dataTableBody">
+                            <!-- 数据行将通过JavaScript动态生成 -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- 图表区域 -->
+        <div class="row mt-4">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header bg-light">
+                        <h6 class="mb-0">
+                            <i class="fas fa-chart-bar me-2"></i>
+                            观看数趋势
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <canvas id="viewsChart" height="200"></canvas>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header bg-light">
+                        <h6 class="mb-0">
+                            <i class="fas fa-chart-pie me-2"></i>
+                            完播率分布
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <canvas id="completionChart" height="200"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 页脚链接 -->
+        <footer class="text-center mt-5 py-3 border-top">
+            <div class="container">
+                <p class="text-muted mb-2">TikTok数据分析面板 © 2024</p>
+                <div>
+                    <a href="/terms" class="text-decoration-none me-3" target="_blank">
+                        <i class="fas fa-file-contract me-1"></i>服务条款
+                    </a>
+                    <a href="/privacy" class="text-decoration-none" target="_blank">
+                        <i class="fas fa-shield-alt me-1"></i>隐私政策
+                    </a>
+                </div>
+            </div>
+        </footer>
+    </div>
+
+    <!-- 加载遮罩 -->
+    <div id="loadingOverlay" class="loading-overlay">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">加载中...</span>
+        </div>
+        <p class="mt-3">正在加载数据...</p>
+    </div>
+
+    <!-- 通知Toast -->
+    <div class="toast-container position-fixed bottom-0 end-0 p-3">
+        <div id="notificationToast" class="toast" role="alert">
+            <div class="toast-header">
+                <i class="fas fa-info-circle text-primary me-2"></i>
+                <strong class="me-auto">通知</strong>
+                <button type="button" class="btn-close" data-bs-dismiss="toast"></button>
+            </div>
+            <div class="toast-body">
+                数据已更新
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html> 

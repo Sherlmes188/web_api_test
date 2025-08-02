@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TikTok 授权测试</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+    <div class="container mt-5">
+        <div class="row justify-content-center">
+            <div class="col-md-8">
+                <div class="card">
+                    <div class="card-header bg-primary text-white">
+                        <h3><i class="fab fa-tiktok"></i> TikTok 授权测试页面</h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="alert alert-info">
+                            <h5><i class="fas fa-info-circle"></i> 重要说明</h5>
+                            <p><strong>由于TikTok Web授权页面的兼容性问题，请按以下步骤手动完成授权：</strong></p>
+                            <ol>
+                                <li><strong>点击下方按钮</strong> - 将在新标签页打开TikTok授权页面</li>
+                                <li><strong>忽略页面错误</strong> - TikTok页面可能显示JavaScript错误，这是正常的</li>
+                                <li><strong>完成登录授权</strong> - 使用你的TikTok账号登录并点击"授权"</li>
+                                <li><strong>复制回调URL</strong> - 授权后，复制浏览器地址栏中的完整URL</li>
+                                <li><strong>粘贴处理</strong> - 回到本页面，将URL粘贴到下方文本框中处理</li>
+                            </ol>
+                        </div>
+                        
+                        <div class="alert alert-warning">
+                            <h6><i class="fas fa-exclamation-triangle"></i> 常见问题</h6>
+                            <ul class="mb-0">
+                                <li><strong>页面显示错误？</strong> 忽略JavaScript错误，继续登录授权</li>
+                                <li><strong>无法自动跳转？</strong> 这是正常的，请手动复制URL</li>
+                                <li><strong>找不到授权按钮？</strong> 滚动TikTok页面，授权按钮通常在底部</li>
+                            </ul>
+                        </div>
+
+                        <div class="text-center mb-4">
+                            <a href="/auth" class="btn btn-danger btn-lg" target="_blank">
+                                <i class="fab fa-tiktok"></i> 开始TikTok授权
+                            </a>
+                        </div>
+
+                        <hr>
+
+                        <div class="card">
+                            <div class="card-header">
+                                <h5><i class="fas fa-clipboard"></i> 手动回调处理</h5>
+                            </div>
+                            <div class="card-body">
+                                <p>如果授权完成后没有自动跳转，请选择以下方式之一：</p>
+                                
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <h6><i class="fas fa-link"></i> 方式1：粘贴完整URL</h6>
+                                        <div class="mb-3">
+                                            <textarea class="form-control" id="callbackUrl" rows="2" 
+                                                      placeholder="http://127.0.0.1:5000/callback?code=xxx&state=xxx"></textarea>
+                                        </div>
+                                        <button class="btn btn-success btn-sm" onclick="processCallback()">
+                                            <i class="fas fa-play"></i> 处理URL
+                                        </button>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <h6><i class="fas fa-key"></i> 方式2：仅输入授权码</h6>
+                                        <div class="mb-3">
+                                            <input type="text" class="form-control" id="authCode" 
+                                                   placeholder="输入code=后面的授权码">
+                                        </div>
+                                        <button class="btn btn-primary btn-sm" onclick="processAuthCode()">
+                                            <i class="fas fa-play"></i> 处理授权码
+                                        </button>
+                                    </div>
+                                </div>
+                                
+                                <div id="callbackResult" class="alert d-none mt-3"></div>
+                            </div>
+                        </div>
+
+                        <hr>
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <h5><i class="fas fa-bug"></i> 当前状态</h5>
+                                <button class="btn btn-outline-info" onclick="checkStatus()">
+                                    <i class="fas fa-refresh"></i> 检查API状态
+                                </button>
+                                <div id="statusInfo" class="mt-2"></div>
+                            </div>
+                            <div class="col-md-6">
+                                <h5><i class="fas fa-link"></i> 快速链接</h5>
+                                <div class="btn-group-vertical d-grid gap-2">
+                                    <a href="/debug" class="btn btn-outline-secondary btn-sm">调试页面</a>
+                                    <a href="/redirect_debug" class="btn btn-outline-warning btn-sm">重定向诊断</a>
+                                    <a href="/" class="btn btn-outline-primary btn-sm">返回主页</a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        async function processCallback() {
+            const callbackUrl = document.getElementById('callbackUrl').value.trim();
+            const resultDiv = document.getElementById('callbackResult');
+            
+            if (!callbackUrl) {
+                showResult('请输入回调URL', 'danger');
+                return;
+            }
+            
+            try {
+                // 解析URL参数
+                const url = new URL(callbackUrl);
+                const code = url.searchParams.get('code');
+                const state = url.searchParams.get('state');
+                const error = url.searchParams.get('error');
+                
+                if (error) {
+                    showResult(`授权错误：${error}`, 'danger');
+                    return;
+                }
+                
+                if (!code) {
+                    showResult('URL中未找到授权码(code)', 'danger');
+                    return;
+                }
+                
+                showResult(`正在处理授权码：${code.substring(0, 20)}...`, 'info');
+                
+                // 调用手动授权API
+                const response = await fetch('/api/manual_auth', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        code: code,
+                        state: state
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    showResult(`${result.message}`, 'success');
+                    // 3秒后跳转到主页
+                    setTimeout(() => {
+                        window.location.href = '/';
+                    }, 3000);
+                } else {
+                    showResult(`处理失败：${result.message}`, 'danger');
+                }
+                
+            } catch (error) {
+                showResult(`处理失败：${error.message}`, 'danger');
+            }
+        }
+        
+        async function processAuthCode() {
+            const authCode = document.getElementById('authCode').value.trim();
+            
+            if (!authCode) {
+                showResult('请输入授权码', 'danger');
+                return;
+            }
+            
+            try {
+                showResult(`正在处理授权码：${authCode.substring(0, 20)}...`, 'info');
+                
+                // 调用手动授权API
+                const response = await fetch('/api/manual_auth', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        code: authCode,
+                        state: '' // 仅授权码模式，不验证state
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    showResult(`${result.message}`, 'success');
+                    // 3秒后跳转到主页
+                    setTimeout(() => {
+                        window.location.href = '/';
+                    }, 3000);
+                } else {
+                    showResult(`处理失败：${result.message}`, 'danger');
+                }
+                
+            } catch (error) {
+                showResult(`处理失败：${error.message}`, 'danger');
+            }
+        }
+        
+        async function checkStatus() {
+            try {
+                const response = await fetch('/api/auth_status');
+                const result = await response.json();
+                
+                const statusDiv = document.getElementById('statusInfo');
+                statusDiv.innerHTML = `
+                    <div class="small">
+                        <strong>API类型：</strong> ${result.api_type}<br>
+                        <strong>已配置：</strong> ${result.configured ? '是' : '否'}<br>
+                        <strong>已授权：</strong> ${result.authenticated ? '是' : '否'}<br>
+                        <strong>状态：</strong> ${result.message}
+                    </div>
+                `;
+            } catch (error) {
+                document.getElementById('statusInfo').innerHTML = `<div class="text-danger small">状态检查失败</div>`;
+            }
+        }
+        
+        function showResult(message, type) {
+            const resultDiv = document.getElementById('callbackResult');
+            resultDiv.className = `alert alert-${type}`;
+            resultDiv.classList.remove('d-none');
+            resultDiv.textContent = message;
+        }
+        
+        // 页面加载时检查状态
+        document.addEventListener('DOMContentLoaded', function() {
+            checkStatus();
+        });
+    </script>
+</body>
+</html> 

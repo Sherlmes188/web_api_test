@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>重定向URI调试</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+    <div class="container mt-5">
+        <div class="row justify-content-center">
+            <div class="col-md-10">
+                <div class="card">
+                    <div class="card-header bg-warning">
+                        <h3><i class="fas fa-exclamation-triangle"></i> 重定向URI问题诊断</h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="alert alert-danger">
+                            <h5><i class="fas fa-times-circle"></i> 问题诊断</h5>
+                            <p><strong>TikTok错误：</strong> "redirect_uri 重定向uri"</p>
+                            <p><strong>原因：</strong> TikTok开发者后台配置的回调URL与代码中使用的不匹配</p>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="card">
+                                    <div class="card-header bg-info text-white">
+                                        <h5><i class="fas fa-code"></i> 当前代码配置</h5>
+                                    </div>
+                                    <div class="card-body">
+                                        <p><strong>默认回调URL：</strong></p>
+                                        <code id="currentRedirectUri">http://localhost:5000/callback</code>
+                                        <br><br>
+                                        <p><strong>可能的替代方案：</strong></p>
+                                        <ul>
+                                            <li><code>http://127.0.0.1:5000/callback</code></li>
+                                            <li><code>https://localhost:5000/callback</code></li>
+                                            <li><code>https://127.0.0.1:5000/callback</code></li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="card">
+                                    <div class="card-header bg-danger text-white">
+                                        <h5><i class="fas fa-cog"></i> TikTok开发者后台</h5>
+                                    </div>
+                                    <div class="card-body">
+                                        <p><strong>你需要检查：</strong></p>
+                                        <ol>
+                                            <li>登录 <a href="https://developers.tiktok.com" target="_blank">TikTok开发者平台</a></li>
+                                            <li>找到你的应用设置</li>
+                                            <li>查看"回调URL"或"Redirect URI"配置</li>
+                                            <li>确保与左侧的URL完全匹配</li>
+                                        </ol>
+                                        
+                                        <div class="alert alert-warning mt-3">
+                                            <small><i class="fas fa-lightbulb"></i> <strong>提示：</strong> URL必须完全匹配，包括协议（http/https）、域名（localhost/127.0.0.1）、端口号（5000）和路径（/callback）</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <hr>
+
+                        <div class="row">
+                            <div class="col-12">
+                                <h5><i class="fas fa-tools"></i> 动态配置重定向URI</h5>
+                                <p>如果你知道TikTok后台配置的确切URL，可以在这里临时修改：</p>
+                                
+                                <form id="redirectUriForm">
+                                    <div class="input-group mb-3">
+                                        <span class="input-group-text"><i class="fas fa-link"></i></span>
+                                        <input type="url" class="form-control" id="newRedirectUri" 
+                                               placeholder="输入正确的回调URL，例如：http://127.0.0.1:5000/callback"
+                                               value="http://localhost:5000/callback">
+                                        <button class="btn btn-primary" type="submit">
+                                            <i class="fas fa-save"></i> 临时设置
+                                        </button>
+                                    </div>
+                                </form>
+                                
+                                <div id="updateResult" class="alert d-none"></div>
+                            </div>
+                        </div>
+
+                        <hr>
+
+                        <div class="row">
+                            <div class="col-12">
+                                <h5><i class="fas fa-list-ol"></i> 解决步骤</h5>
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <h6>方案1：修改代码配置</h6>
+                                        <ol>
+                                            <li>查看TikTok后台的回调URL</li>
+                                            <li>在上方输入框中设置正确的URL</li>
+                                            <li>点击"临时设置"</li>
+                                            <li>重新尝试授权</li>
+                                        </ol>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <h6>方案2：修改TikTok后台配置</h6>
+                                        <ol>
+                                            <li>登录TikTok开发者平台</li>
+                                            <li>将回调URL改为：<br><code>http://localhost:5000/callback</code></li>
+                                            <li>保存设置</li>
+                                            <li>重新尝试授权</li>
+                                        </ol>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="text-center mt-4">
+                            <a href="/auth" class="btn btn-warning btn-lg">
+                                <i class="fas fa-redo"></i> 重新尝试授权
+                            </a>
+                            <a href="/debug" class="btn btn-outline-secondary">返回调试页面</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 显示当前配置
+        document.addEventListener('DOMContentLoaded', function() {
+            // 这里可以通过API获取当前配置
+            fetchCurrentConfig();
+        });
+
+        async function fetchCurrentConfig() {
+            try {
+                const response = await fetch('/api/redirect_uri_info');
+                if (response.ok) {
+                    const data = await response.json();
+                    document.getElementById('currentRedirectUri').textContent = data.redirect_uri;
+                }
+            } catch (error) {
+                console.log('无法获取当前配置');
+            }
+        }
+
+        document.getElementById('redirectUriForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const newUri = document.getElementById('newRedirectUri').value.trim();
+            const resultDiv = document.getElementById('updateResult');
+            
+            if (!newUri) {
+                showResult('请输入有效的回调URL', 'danger');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/set_redirect_uri', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ redirect_uri: newUri })
+                });
+
+                const result = await response.json();
+                
+                if (result.success) {
+                    showResult(`回调URL已临时设置为：${newUri}`, 'success');
+                    document.getElementById('currentRedirectUri').textContent = newUri;
+                } else {
+                    showResult(`设置失败：${result.message}`, 'danger');
+                }
+            } catch (error) {
+                showResult(`设置失败：${error.message}`, 'danger');
+            }
+        });
+
+        function showResult(message, type) {
+            const resultDiv = document.getElementById('updateResult');
+            resultDiv.className = `alert alert-${type}`;
+            resultDiv.classList.remove('d-none');
+            resultDiv.textContent = message;
+        }
+    </script>
+</body>
+</html> 

@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API配置 - TikTok数据分析面板</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="{{ url_for('static', filename='css/style.css') }}" rel="stylesheet">
+</head>
+<body>
+    <!-- 导航栏 -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container">
+            <a class="navbar-brand" href="{{ url_for('index') }}">
+                <i class="fab fa-tiktok me-2"></i>TikTok数据分析面板
+            </a>
+            <div class="navbar-nav ms-auto">
+                <span class="navbar-text">
+                    <i class="fas fa-cog me-1"></i>API配置
+                </span>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container my-5">
+        <div class="row justify-content-center">
+            <div class="col-lg-8">
+                <!-- 配置说明 -->
+                <div class="card mb-4">
+                    <div class="card-header bg-info text-white">
+                        <h5 class="mb-0">
+                            <i class="fas fa-info-circle me-2"></i>TikTok官方API配置
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <p class="mb-3">请输入你在TikTok开发者平台获得的API密钥：</p>
+                        <ul class="mb-0">
+                            <li>登录 <a href="https://developers.tiktok.com/" target="_blank">TikTok开发者平台</a></li>
+                            <li>在你的应用中找到 <strong>Client Key</strong> 和 <strong>Client Secret</strong></li>
+                            <li>将这些信息填入下方表单</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- API配置表单 -->
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-key me-2"></i>API密钥配置
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <form id="apiConfigForm">
+                            <div class="mb-3">
+                                <label for="clientKey" class="form-label">
+                                    <i class="fas fa-user-tag me-1"></i>Client Key *
+                                </label>
+                                <input type="text" class="form-control" id="clientKey" name="clientKey" 
+                                       placeholder="例如: sbawv8xtaenmc9e6s1" required>
+                                <div class="form-text">从TikTok开发者平台复制的Client Key</div>
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="clientSecret" class="form-label">
+                                    <i class="fas fa-lock me-1"></i>Client Secret *
+                                </label>
+                                <input type="password" class="form-control" id="clientSecret" name="clientSecret" 
+                                       placeholder="例如: oPpxwcKlMTQKRaA1Ujz2hNri2GDlCHaZ" required>
+                                <div class="form-text">从TikTok开发者平台复制的Client Secret</div>
+                                <div class="form-check mt-2">
+                                    <input class="form-check-input" type="checkbox" id="showSecret">
+                                    <label class="form-check-label" for="showSecret">
+                                        显示密码
+                                    </label>
+                                </div>
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="redirectUri" class="form-label">
+                                    <i class="fas fa-link me-1"></i>Redirect URI
+                                </label>
+                                <input type="url" class="form-control" id="redirectUri" name="redirectUri" 
+                                       value="http://localhost:5000/callback" readonly>
+                                <div class="form-text">OAuth回调地址（已设置，无需修改）</div>
+                            </div>
+
+                            <div class="alert alert-warning">
+                                <i class="fas fa-exclamation-triangle me-2"></i>
+                                <strong>安全提醒：</strong> API密钥仅在本次会话中使用，不会永久存储。关闭浏览器后需要重新输入。
+                            </div>
+
+                            <div class="d-grid gap-2">
+                                <button type="submit" class="btn btn-primary btn-lg">
+                                    <i class="fas fa-save me-2"></i>保存配置并继续
+                                </button>
+                                <button type="button" class="btn btn-outline-secondary" onclick="testConnection()">
+                                    <i class="fas fa-wifi me-2"></i>测试连接
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- 当前配置状态 -->
+                <div class="card mt-4" id="configStatus" style="display: none;">
+                    <div class="card-header bg-success text-white">
+                        <h5 class="mb-0">
+                            <i class="fas fa-check-circle me-2"></i>配置状态
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="statusContent"></div>
+                        <div class="mt-3">
+                            <a href="{{ url_for('index') }}" class="btn btn-success">
+                                <i class="fas fa-arrow-right me-2"></i>进入仪表板
+                            </a>
+                            <button type="button" class="btn btn-outline-danger ms-2" onclick="clearConfig()">
+                                <i class="fas fa-trash me-2"></i>清除配置
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 帮助信息 -->
+                <div class="card mt-4">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-question-circle me-2"></i>需要帮助？
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <h6><i class="fas fa-book me-1"></i>文档指南</h6>
+                                <ul class="list-unstyled">
+                                    <li><a href="/static/docs/tiktok_official_api_guide.md" target="_blank">官方API注册指南</a></li>
+                                    <li><a href="/static/docs/api_setup_guide.md" target="_blank">API设置指南</a></li>
+                                </ul>
+                            </div>
+                            <div class="col-md-6">
+                                <h6><i class="fas fa-tools me-1"></i>工具链接</h6>
+                                <ul class="list-unstyled">
+                                    <li><a href="https://developers.tiktok.com/" target="_blank">TikTok开发者平台</a></li>
+                                    <li><a href="/terms" target="_blank">服务条款</a></li>
+                                    <li><a href="/privacy" target="_blank">隐私政策</a></li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        class ApiConfigManager {
+            constructor() {
+                this.initializeForm();
+                this.checkCurrentConfig();
+            }
+
+            initializeForm() {
+                // 显示/隐藏密码功能
+                document.getElementById('showSecret').addEventListener('change', (e) => {
+                    const secretInput = document.getElementById('clientSecret');
+                    secretInput.type = e.target.checked ? 'text' : 'password';
+                });
+
+                // 表单提交处理
+                document.getElementById('apiConfigForm').addEventListener('submit', (e) => {
+                    e.preventDefault();
+                    this.saveConfig();
+                });
+            }
+
+            async saveConfig() {
+                const formData = new FormData(document.getElementById('apiConfigForm'));
+                
+                try {
+                    const response = await fetch('/api/config', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            clientKey: formData.get('clientKey'),
+                            clientSecret: formData.get('clientSecret'),
+                            redirectUri: formData.get('redirectUri')
+                        })
+                    });
+
+                    const result = await response.json();
+                    
+                    if (result.success) {
+                        this.showConfigStatus(true, result.message);
+                        // 3秒后自动跳转
+                        setTimeout(() => {
+                            window.location.href = '/';
+                        }, 3000);
+                    } else {
+                        alert('配置失败: ' + result.message);
+                    }
+                } catch (error) {
+                    alert('配置失败: ' + error.message);
+                }
+            }
+
+            async testConnection() {
+                const clientKey = document.getElementById('clientKey').value;
+                const clientSecret = document.getElementById('clientSecret').value;
+
+                if (!clientKey || !clientSecret) {
+                    alert('请先填写Client Key和Client Secret');
+                    return;
+                }
+
+                try {
+                    const response = await fetch('/api/test_connection', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            clientKey: clientKey,
+                            clientSecret: clientSecret
+                        })
+                    });
+
+                    const result = await response.json();
+                    
+                    if (result.success) {
+                        alert('✅ 连接测试成功！');
+                    } else {
+                        alert('❌ 连接测试失败: ' + result.message);
+                    }
+                } catch (error) {
+                    alert('❌ 连接测试失败: ' + error.message);
+                }
+            }
+
+            async checkCurrentConfig() {
+                try {
+                    const response = await fetch('/api/auth_status');
+                    const status = await response.json();
+                    
+                    if (status.api_type === 'official' && status.configured) {
+                        this.showConfigStatus(true, '当前已配置官方API密钥');
+                    }
+                } catch (error) {
+                    console.log('无法获取当前配置状态');
+                }
+            }
+
+            showConfigStatus(success, message) {
+                const statusDiv = document.getElementById('configStatus');
+                const contentDiv = document.getElementById('statusContent');
+                
+                contentDiv.innerHTML = `
+                    <div class="alert ${success ? 'alert-success' : 'alert-danger'}">
+                        <i class="fas ${success ? 'fa-check' : 'fa-times'} me-2"></i>
+                        ${message}
+                    </div>
+                `;
+                
+                statusDiv.style.display = 'block';
+            }
+
+            async clearConfig() {
+                if (confirm('确定要清除当前API配置吗？')) {
+                    try {
+                        const response = await fetch('/api/clear_config', {
+                            method: 'POST'
+                        });
+
+                        const result = await response.json();
+                        
+                        if (result.success) {
+                            location.reload();
+                        } else {
+                            alert('清除配置失败: ' + result.message);
+                        }
+                    } catch (error) {
+                        alert('清除配置失败: ' + error.message);
+                    }
+                }
+            }
+        }
+
+        // 全局函数
+        function testConnection() {
+            window.apiConfig.testConnection();
+        }
+
+        function clearConfig() {
+            window.apiConfig.clearConfig();
+        }
+
+        // 初始化
+        window.addEventListener('DOMContentLoaded', () => {
+            window.apiConfig = new ApiConfigManager();
+        });
+    </script>
+</body>
+</html> 
