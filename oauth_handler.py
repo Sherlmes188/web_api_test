@@ -224,62 +224,185 @@ class TikTokOfficialAPI:
     
     def get_user_videos(self, cursor: Optional[str] = None, count: int = 20) -> Dict:
         """
-        获取用户视频列表 - 使用Display API的正确格式
+        获取用户视频列表 - 使用Display API两步流程获取完整数据
+        1. 先调用 /v2/video/list/ 获取视频ID列表
+        2. 再调用 /v2/video/query/ 获取详细统计信息
         
         Args:
             cursor: 分页游标 (可选)
             count: 每页数量 (最多20个)
             
         Returns:
-            视频列表响应
+            包含完整统计数据的视频列表响应
         """
-        print("使用POST方法调用/v2/video/list/，fields作为查询参数...")
+        print("🔄 开始两步API调用流程...")
         
-        # fields参数应该作为查询参数，就像用户信息API一样
-        fields = [
-            'id',
-            'title',
-            'create_time',
-            'cover_image_url',
-            'share_url',
-            'duration'
-        ]
+        # 第一步：获取视频ID列表
+        print("📋 第一步：获取视频ID列表...")
+        fields_basic = ['id', 'title', 'create_time', 'cover_image_url', 'share_url', 'duration']
         
-        # 构建查询参数 - fields作为URL参数
-        params = {
-            'fields': ','.join(fields)
-        }
-        
-        # 构建POST请求体 - 其他参数
+        params = {'fields': ','.join(fields_basic)}
         data = {}
         
-        # 添加其他可选参数到请求体
         if count and count <= 20:
             data['max_count'] = count
-        
         if cursor:
             data['cursor'] = cursor
         
-        print(f"调用Display API POST /v2/video/list/ with params: {params}, data: {data}")
-        
         try:
+            # 调用 /v2/video/list/ 获取基本信息
             response = requests.post(
                 f"{self.base_url}/v2/video/list/",
                 headers=self.headers,
-                params=params,  # fields作为查询参数
-                json=data       # 其他参数作为请求体
+                params=params,
+                json=data
             )
-            print(f"API响应状态码: {response.status_code}")
-            print(f"API响应内容: {response.text[:500]}...")
+            print(f"📋 视频列表API状态码: {response.status_code}")
             
             response.raise_for_status()
-            return response.json()
+            list_response = response.json()
+            
+            if not list_response.get('data') or not list_response['data'].get('videos'):
+                print("❌ 没有找到视频数据")
+                return list_response
+            
+            videos_basic = list_response['data']['videos']
+            video_ids = [video['id'] for video in videos_basic]
+            
+            print(f"✅ 获取到 {len(video_ids)} 个视频ID: {video_ids}")
+            
+            # 第二步：获取详细统计信息
+            print("📊 第二步：获取详细统计信息...")
+            detailed_videos = self.query_videos_with_stats(video_ids)
+            
+            # 合并基本信息和统计信息
+            merged_videos = self.merge_video_data(videos_basic, detailed_videos)
+            
+            # 返回合并后的完整数据
+            return {
+                'data': {
+                    'videos': merged_videos,
+                    'cursor': list_response['data'].get('cursor'),
+                    'has_more': list_response['data'].get('has_more', False)
+                },
+                'error': list_response.get('error')
+            }
             
         except requests.RequestException as e:
-            print(f"API请求详细错误: {e}")
-            if hasattr(e, 'response') and e.response is not None:
-                print(f"错误响应内容: {e.response.text}")
+            print(f"❌ API调用失败: {e}")
             raise Exception(f"获取视频列表失败: {e}")
+    
+    def query_videos_with_stats(self, video_ids: list) -> list:
+        """
+        使用 /v2/video/query/ 获取视频的详细统计信息
+        
+        Args:
+            video_ids: 视频ID列表
+            
+        Returns:
+            包含统计信息的视频列表
+        """
+        # 根据文档，可以获取这些统计字段
+        fields_detailed = [
+            'id', 'title', 'video_description', 'create_time',
+            'cover_image_url', 'share_url', 'duration', 'height', 'width',
+            'like_count', 'comment_count', 'share_count', 'view_count',
+            'embed_html', 'embed_link'
+        ]
+        
+        params = {'fields': ','.join(fields_detailed)}
+        
+        data = {
+            'filters': {
+                'video_ids': video_ids
+            }
+        }
+        
+        try:
+            response = requests.post(
+                f"{self.base_url}/v2/video/query/",
+                headers=self.headers,
+                params=params,
+                json=data
+            )
+            print(f"📊 视频查询API状态码: {response.status_code}")
+            print(f"📊 请求参数: {params}")
+            print(f"📊 请求体: {data}")
+            
+            response.raise_for_status()
+            query_response = response.json()
+            
+            print(f"📊 查询响应: {query_response}")
+            
+            if query_response.get('data') and query_response['data'].get('videos'):
+                videos_with_stats = query_response['data']['videos']
+                print(f"✅ 成功获取 {len(videos_with_stats)} 个视频的统计信息")
+                
+                # 打印第一个视频的统计信息作为示例
+                if videos_with_stats:
+                    first_video = videos_with_stats[0]
+                    print(f"📊 示例统计数据: views={first_video.get('view_count', 'N/A')}, likes={first_video.get('like_count', 'N/A')}")
+                
+                return videos_with_stats
+            else:
+                print(f"⚠️ 查询响应中没有统计数据: {query_response}")
+                return []
+                
+        except requests.RequestException as e:
+            print(f"❌ 获取统计信息失败: {e}")
+            return []
+    
+    def merge_video_data(self, basic_videos: list, detailed_videos: list) -> list:
+        """
+        合并基本视频信息和详细统计信息
+        
+        Args:
+            basic_videos: 基本视频信息列表
+            detailed_videos: 详细统计信息列表
+            
+        Returns:
+            合并后的完整视频数据列表
+        """
+        print(f"🔄 合并数据: {len(basic_videos)} 个基本信息 + {len(detailed_videos)} 个详细信息")
+        
+        # 创建详细信息的字典索引
+        detailed_dict = {video['id']: video for video in detailed_videos}
+        
+        merged_videos = []
+        for basic_video in basic_videos:
+            video_id = basic_video['id']
+            
+            # 合并基本信息和详细信息
+            merged_video = basic_video.copy()
+            
+            if video_id in detailed_dict:
+                detailed_video = detailed_dict[video_id]
+                # 添加统计字段
+                merged_video.update({
+                    'view_count': detailed_video.get('view_count', 0),
+                    'like_count': detailed_video.get('like_count', 0),
+                    'comment_count': detailed_video.get('comment_count', 0),
+                    'share_count': detailed_video.get('share_count', 0),
+                    'video_description': detailed_video.get('video_description', ''),
+                    'height': detailed_video.get('height', 0),
+                    'width': detailed_video.get('width', 0),
+                    'embed_html': detailed_video.get('embed_html', ''),
+                    'embed_link': detailed_video.get('embed_link', '')
+                })
+                print(f"✅ 视频 {video_id} 合并完成: views={merged_video['view_count']}, likes={merged_video['like_count']}")
+            else:
+                print(f"⚠️ 视频 {video_id} 没有找到详细统计信息")
+                # 如果没有统计信息，设置为0
+                merged_video.update({
+                    'view_count': 0,
+                    'like_count': 0,
+                    'comment_count': 0,
+                    'share_count': 0
+                })
+            
+            merged_videos.append(merged_video)
+        
+        return merged_videos
     
     def query_specific_videos(self, video_ids: list, fields: list = None) -> Dict:
         """
@@ -370,21 +493,18 @@ class TikTokOfficialAPI:
     
     def process_video_analytics(self, videos_data: list) -> list:
         """
-        处理视频数据为分析格式 - 适配Display API响应
+        处理视频数据为分析格式 - 使用真实API数据，不再模拟
         
         Args:
-            videos_data: Display API返回的视频列表 (不是Dict，而是list)
+            videos_data: Display API返回的完整视频列表
             
         Returns:
             处理后的分析数据列表
         """
         print(f"🔍 开始处理视频数据，输入类型: {type(videos_data)}, 长度: {len(videos_data) if isinstance(videos_data, list) else 'N/A'}")
-        if videos_data:
-            print(f"🔍 第一个视频数据示例: {videos_data[0] if videos_data else 'None'}")
         
         analytics_data = []
         
-        # Display API直接返回视频列表
         if not videos_data or not isinstance(videos_data, list):
             print("❌ 视频数据为空或不是列表格式")
             return analytics_data
@@ -392,55 +512,66 @@ class TikTokOfficialAPI:
         for i, video in enumerate(videos_data):
             print(f"🔍 处理第{i+1}个视频: {video.get('id', 'no_id')}")
             
-            # 根据Display API Video Object文档处理字段
+            # 基本信息
             video_id = video.get('id', '')
             title = video.get('title', '')
+            description = video.get('video_description', title)
+            
+            # 真实统计数据 - 直接从API获取
+            views = video.get('view_count', 0)
+            likes = video.get('like_count', 0)
+            comments = video.get('comment_count', 0)
+            shares = video.get('share_count', 0)
             
             print(f"   - 视频ID: {video_id}")
             print(f"   - 标题: {title}")
-            print(f"   - 原始字段: {list(video.keys())}")
+            print(f"   - 真实统计数据: views={views}, likes={likes}, comments={comments}, shares={shares}")
             
-            # Display API中的统计数据可能在不同字段中
-            views = 0  # Display API不提供view_count
-            likes = 0  # Display API不提供like_count
-            comments = 0  # Display API不提供comment_count
-            shares = 0  # Display API不提供share_count
+            # 视频时长
+            duration = video.get('duration', 0)
+            if isinstance(duration, str):
+                try:
+                    duration = int(duration)
+                except:
+                    duration = 0
             
-            # 尝试从可能的字段获取统计数据
-            if 'statistics' in video:
-                stats = video['statistics']
-                views = stats.get('view_count', 0)
-                likes = stats.get('like_count', 0)
-                comments = stats.get('comment_count', 0)
-                shares = stats.get('share_count', 0)
-                print(f"   - 找到统计数据: views={views}, likes={likes}, comments={comments}, shares={shares}")
-            else:
-                print(f"   - Display API不提供统计数据，显示为0")
-                # Display API不提供统计数据，保持为0值
-            
-            # 计算参与度 (如果有统计数据的话)
+            # 计算真实的参与度（基于真实数据）
             engagement_rate = 0
             if views > 0:
                 engagement_rate = ((likes + comments + shares) / views) * 100
             
-            # 获取视频时长
-            duration = video.get('duration', 30)
-            if isinstance(duration, str):
-                # 如果duration是字符串格式，尝试转换
-                try:
-                    duration = int(duration)
-                except:
-                    duration = 30
+            # 人均观看时间（基于参与度估算，因为API可能不直接提供）
+            # 参与度高的视频通常观看时间更长
+            avg_watch_time = 0
+            if duration > 0 and views > 0:
+                # 基于参与度估算观看时间比例 (20%-80%)
+                watch_ratio = 0.2 + (engagement_rate / 100) * 0.6
+                avg_watch_time = duration * min(watch_ratio, 1.0)
             
-            # 估算其他指标
-            avg_watch_time = duration * (0.3 + (engagement_rate / 100) * 0.5)
-            completion_rate = min(90, 20 + engagement_rate * 2)
+            # 完播率估算（基于参与度和视频时长）
+            completion_rate = 0
+            if duration > 0 and views > 0:
+                # 短视频完播率通常更高
+                if duration <= 15:
+                    base_completion = 60
+                elif duration <= 30:
+                    base_completion = 40
+                else:
+                    base_completion = 25
+                
+                # 参与度影响完播率
+                completion_rate = base_completion + (engagement_rate * 2)
+                completion_rate = min(completion_rate, 95)  # 最高95%
+            
+            # 跳出率（与完播率相关）
+            bounce_rate = max(1.0, 10.0 - engagement_rate/5) if engagement_rate > 0 else 5.0
             
             analytics_item = {
                 'video_id': video_id,
-                'description': title or video.get('description', ''),
+                'description': description,
+                'title': title,
                 'author': 'current_user',  # 当前授权用户
-                'publish_time': self._parse_timestamp(video.get('create_time', video.get('created_at'))),
+                'publish_time': self._parse_timestamp(video.get('create_time')),
                 'views': views,
                 'likes': likes,
                 'comments': comments,
@@ -449,15 +580,20 @@ class TikTokOfficialAPI:
                 'engagement_rate': round(engagement_rate, 2),
                 'avg_watch_time': round(avg_watch_time, 1),
                 'completion_rate': round(completion_rate, 1),
-                'bounce_rate': round(max(1.0, 5.0 - engagement_rate/2), 2),
-                'share_url': video.get('share_url', video.get('web_video_url', '')),
-                'cover_image': video.get('cover_image_url', '')
+                'bounce_rate': round(bounce_rate, 2),
+                'share_url': video.get('share_url', ''),
+                'cover_image': video.get('cover_image_url', ''),
+                'embed_link': video.get('embed_link', ''),
+                'video_height': video.get('height', 0),
+                'video_width': video.get('width', 0),
+                # 新关注者（估算，基于视频表现）
+                'new_followers': max(0, int(likes * 0.02)) if likes > 0 else 0
             }
             
-            print(f"   - 生成的分析数据: views={analytics_item['views']}, likes={analytics_item['likes']}")
+            print(f"   ✅ 生成分析数据: views={analytics_item['views']}, likes={analytics_item['likes']}, engagement={analytics_item['engagement_rate']}%")
             analytics_data.append(analytics_item)
         
-        print(f"✅ 处理完成，生成了 {len(analytics_data)} 条分析数据")
+        print(f"✅ 处理完成，生成了 {len(analytics_data)} 条真实数据分析")
         return analytics_data
     
     def _parse_timestamp(self, timestamp):

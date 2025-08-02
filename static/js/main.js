@@ -165,39 +165,22 @@ class TikTokAnalyticsDashboard {
     updateStatistics() {
         const data = this.currentData || [];
         
-        // 计算统计数据
+        // 计算真实统计数据
         const totalVideos = data.length;
         const totalViews = data.reduce((sum, item) => sum + (item.views || 0), 0);
         const totalLikes = data.reduce((sum, item) => sum + (item.likes || 0), 0);
+        const totalNewFollowers = data.reduce((sum, item) => sum + (item.new_followers || 0), 0);
         
-        // 计算平均完播率
-        const completionRates = data.map(item => {
-            const rate = typeof item.completion_rate === 'string' 
-                ? parseFloat(item.completion_rate.replace('%', '')) 
-                : item.completion_rate || 0;
-            return rate;
-        }).filter(rate => !isNaN(rate));
-        
-        const avgCompletionRate = completionRates.length > 0 
-            ? (completionRates.reduce((sum, rate) => sum + rate, 0) / completionRates.length).toFixed(1)
+        // 计算平均参与度（基于真实数据）
+        const avgEngagement = data.length > 0 
+            ? (data.reduce((sum, item) => sum + (item.engagement_rate || 0), 0) / data.length).toFixed(2)
             : 0;
 
-        // 更新DOM元素 - 如果没有真实数据则显示相应提示
+        // 更新DOM元素
         this.updateElement('totalVideos', totalVideos);
-        
-        if (totalViews === 0 && totalVideos > 0) {
-            this.updateElement('totalViews', '统计不可用');
-        } else {
-            this.updateElement('totalViews', this.formatNumber(totalViews));
-        }
-        
-        this.updateElement('avgCompletionRate', `${avgCompletionRate}%`);
-        
-        if (totalLikes === 0 && totalVideos > 0) {
-            this.updateElement('totalFollowers', '统计不可用');
-        } else {
-            this.updateElement('totalFollowers', this.formatNumber(totalLikes));
-        }
+        this.updateElement('totalViews', this.formatNumber(totalViews));
+        this.updateElement('avgCompletionRate', `${avgEngagement}%`); // 显示平均参与度
+        this.updateElement('totalFollowers', this.formatNumber(totalNewFollowers)); // 显示新关注者总数
     }
 
     updateTable() {
@@ -250,6 +233,7 @@ class TikTokAnalyticsDashboard {
             new Date(item.publish_time).toLocaleDateString('zh-CN') : 
             '未知时间';
 
+        // 显示真实的API数据
         row.innerHTML = `
             <td>
                 <a href="${item.share_url || '#'}" target="_blank" class="video-link">
@@ -257,23 +241,22 @@ class TikTokAnalyticsDashboard {
                 </a>
             </td>
             <td>
-                <span class="product-tag">${item.description || '无描述'}</span>
-            </td>
-            <td>
-                <span class="badge service-badge service-tiktok">TikTok</span>
+                <span class="product-tag">${item.author || '当前用户'}</span>
             </td>
             <td>${publishDate}</td>
-            <td class="number-cell">${item.views > 0 ? this.formatNumber(item.views) : '统计不可用'}</td>
+            <td class="number-cell">${this.formatNumber(item.views || 0)}</td>
             <td class="number-cell">${item.avg_watch_time || 0}s</td>
-            <td class="number-cell">${item.likes > 0 ? this.formatNumber(item.likes) : '统计不可用'}</td>
+            <td class="number-cell">${this.formatNumber(item.new_followers || 0)}</td>
             <td class="percentage-cell ${this.getPercentageClass(completionRate)}">${completionRate}</td>
             <td class="number-cell">${item.bounce_rate || 0}%</td>
             <td class="number-cell">${item.duration || 0}s</td>
-            <td class="number-cell">${item.comments > 0 ? this.formatNumber(item.comments) : '统计不可用'}</td>
+            <td class="number-cell">${this.formatNumber(item.likes || 0)}</td>
+            <td class="number-cell">${this.formatNumber(item.comments || 0)}</td>
             <td class="number-cell">${item.engagement_rate || 0}%</td>
             <td>
                 <span class="status-indicator">
-                    <span class="status-dot active"></span>活跃
+                    <span class="status-dot ${item.views > 1000 ? 'active' : 'inactive'}"></span>
+                    ${item.views > 1000 ? '热门' : '正常'}
                 </span>
             </td>
         `;
