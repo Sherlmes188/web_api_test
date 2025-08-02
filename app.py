@@ -126,12 +126,21 @@ def update_data():
                         videos_response = api.get_user_videos(count=20)
                         
                         # Display API的响应格式: {"data": {"videos": [...], "cursor": ..., "has_more": bool}, "error": {...}}
+                        print(f"🔍 API响应结构: {videos_response.keys() if videos_response else 'None'}")
+                        if videos_response.get('data'):
+                            print(f"🔍 data字段内容: {videos_response['data'].keys()}")
+                            if videos_response['data'].get('videos'):
+                                print(f"🔍 videos数量: {len(videos_response['data']['videos'])}")
+                        
                         if videos_response.get('data') and videos_response['data'].get('videos'):
                             raw_videos = videos_response['data']['videos']
+                            print(f"🔍 开始处理 {len(raw_videos)} 个原始视频数据")
                             current_data = api.process_video_analytics(raw_videos)
+                            print(f"🎉 成功生成 {len(current_data)} 条分析数据")
                             message = f"成功获取 {len(current_data)} 个视频数据"
                             status = 'success'
                         else:
+                            print("❌ API响应中没有视频数据")
                             current_data = []
                             message = "暂无视频数据或API返回为空"
                             status = 'no_data'
