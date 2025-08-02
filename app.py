@@ -126,11 +126,7 @@ def update_data():
                         videos_response = api.get_user_videos(count=20)
                         
                         # Display API的响应格式: {"data": {"videos": [...], "cursor": ..., "has_more": bool}, "error": {...}}
-                        if videos_response.get('error', {}).get('code') == 'display_api_limitation':
-                            current_data = generate_display_api_demo_data()
-                            message = "TikTok Display API限制：只能查询特定视频，无法列出所有视频。当前显示演示数据以展示功能。"
-                            status = 'api_limitation'
-                        elif videos_response.get('data') and videos_response['data'].get('videos'):
+                        if videos_response.get('data') and videos_response['data'].get('videos'):
                             raw_videos = videos_response['data']['videos']
                             current_data = api.process_video_analytics(raw_videos)
                             message = f"成功获取 {len(current_data)} 个视频数据"
@@ -141,9 +137,15 @@ def update_data():
                             status = 'no_data'
                     except Exception as e:
                         print(f"获取官方API数据失败: {e}")
-                        current_data = []
-                        message = f"获取数据失败: {str(e)}"
-                        status = 'error'
+                        # 如果是API限制，显示演示数据
+                        if "Display API限制" in str(e) or "只能查询特定视频" in str(e):
+                            current_data = generate_display_api_demo_data()
+                            message = "TikTok Display API限制：只能查询特定视频。当前显示演示数据。"
+                            status = 'api_limitation'
+                        else:
+                            current_data = []
+                            message = f"获取数据失败: {str(e)}"
+                            status = 'error'
                 
         elif api_type == 'third_party':
             # 使用第三方API获取真实数据

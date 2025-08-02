@@ -224,8 +224,7 @@ class TikTokOfficialAPI:
     
     def get_user_videos(self, cursor: Optional[str] = None, count: int = 20) -> Dict:
         """
-        获取用户视频列表 - 使用Display API格式
-        由于/v2/video/list/不存在，我们需要先获取用户信息，然后尝试其他方法
+        获取用户视频列表 - 使用Display API的正确格式
         
         Args:
             cursor: 分页游标 (可选)
@@ -234,33 +233,49 @@ class TikTokOfficialAPI:
         Returns:
             视频列表响应
         """
-        print("Display API中没有/v2/video/list/端点，尝试替代方案...")
+        print("使用POST方法调用/v2/video/list/，包含必需的fields参数...")
         
-        # 第一步：先获取用户信息确认API工作
+        # 根据测试结果，/v2/video/list/ 需要POST方法和fields参数
+        fields = [
+            'id',
+            'title',
+            'create_time',
+            'cover_image_url',
+            'share_url',
+            'duration'
+        ]
+        
+        # 构建请求体 - 根据400错误提示，fields是必需的
+        data = {
+            'fields': ','.join(fields)
+        }
+        
+        # 添加其他可选参数
+        if count and count <= 20:
+            data['max_count'] = count
+        
+        if cursor:
+            data['cursor'] = cursor
+        
+        print(f"调用Display API POST /v2/video/list/ with data: {data}")
+        
         try:
-            user_info = self.get_user_info(['open_id', 'display_name'])
-            print(f"用户信息获取成功: {user_info}")
+            response = requests.post(
+                f"{self.base_url}/v2/video/list/",
+                headers=self.headers,
+                json=data  # 使用json而不是params，因为是POST请求
+            )
+            print(f"API响应状态码: {response.status_code}")
+            print(f"API响应内容: {response.text[:500]}...")
             
-            # Display API可能不提供直接获取用户所有视频的方法
-            # 它主要用于显示特定的视频，而不是列出所有视频
+            response.raise_for_status()
+            return response.json()
             
-            # 返回一个模拟的响应，说明需要使用不同的方法
-            return {
-                'data': {
-                    'videos': [],
-                    'has_more': False,
-                    'cursor': None
-                },
-                'error': {
-                    'code': 'display_api_limitation',
-                    'message': 'Display API不支持列出用户的所有视频，只能查询特定视频ID'
-                },
-                'user_info': user_info
-            }
-            
-        except Exception as e:
-            print(f"获取用户信息失败: {e}")
-            raise Exception(f"Display API限制: 无法列出用户视频，只能查询特定视频。错误: {e}")
+        except requests.RequestException as e:
+            print(f"API请求详细错误: {e}")
+            if hasattr(e, 'response') and e.response is not None:
+                print(f"错误响应内容: {e.response.text}")
+            raise Exception(f"获取视频列表失败: {e}")
     
     def query_specific_videos(self, video_ids: list, fields: list = None) -> Dict:
         """
