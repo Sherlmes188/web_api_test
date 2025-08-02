@@ -5,8 +5,6 @@ import random
 import datetime
 import time
 import threading
-import schedule
-from tiktok_api import TikTokDataFetcher
 from config import Config
 
 app = Flask(__name__)
@@ -18,18 +16,12 @@ is_production = os.environ.get('RAILWAY_ENVIRONMENT') or os.environ.get('RENDER'
 
 socketio = SocketIO(app, 
                    cors_allowed_origins="*",
-                   async_mode='gevent' if is_production else None,  # 生产环境使用gevent
+                   async_mode='gevent' if is_production else None,
                    logger=False if is_production else True,
                    engineio_logger=False,
-                   ping_timeout=120,  # 增加超时时间
-                   ping_interval=60,  # 增加ping间隔
-                   transports=['polling', 'websocket'])  # 明确指定传输方式优先级
-
-# 为WSGI服务器提供应用入口点
-application = socketio
-
-# 初始化TikTok数据获取器
-tiktok_fetcher = TikTokDataFetcher(api_key=Config.get_api_key())
+                   ping_timeout=120,
+                   ping_interval=60,
+                   transports=['polling', 'websocket'])
 
 # 全局变量存储实时数据
 current_data = []
@@ -112,15 +104,12 @@ def update_data():
             else:
                 # 检查是否有访问令牌 - 同时检查session和app对象
                 access_token = getattr(app, '_access_token', None) or session.get('access_token')
-                print(f"🔑 授权检查: app._access_token存在={hasattr(app, '_access_token')}, session access_token存在={'access_token' in session}")
                 
                 if not access_token:
                     current_data = []
                     message = "需要授权TikTok账号才能获取数据"
                     status = 'need_auth'
-                    print("❌ 未发现访问令牌")
                 else:
-                    print(f"✅ 找到访问令牌: {access_token[:20]}...")
                     # 用户已授权，获取实际数据
                     try:
                         from oauth_handler import TikTokOfficialAPI
@@ -130,21 +119,17 @@ def update_data():
                         videos_response = api.get_user_videos(count=20)
                         
                         # Display API的响应格式: {"data": {"videos": [...], "cursor": ..., "has_more": bool}, "error": {...}}
-                        print(f"🔍 API响应结构: {videos_response.keys() if videos_response else 'None'}")
                         if videos_response.get('data'):
-                            print(f"🔍 data字段内容: {videos_response['data'].keys()}")
                             if videos_response['data'].get('videos'):
-                                print(f"🔍 videos数量: {len(videos_response['data']['videos'])}")
-                        
-                        if videos_response.get('data') and videos_response['data'].get('videos'):
-                            raw_videos = videos_response['data']['videos']
-                            print(f"🔍 开始处理 {len(raw_videos)} 个原始视频数据")
-                            current_data = api.process_video_analytics(raw_videos)
-                            print(f"🎉 成功生成 {len(current_data)} 条分析数据")
-                            message = f"成功获取 {len(current_data)} 个视频数据"
-                            status = 'success'
+                                raw_videos = videos_response['data']['videos']
+                                current_data = api.process_video_analytics(raw_videos)
+                                message = f"成功获取 {len(current_data)} 个视频数据"
+                                status = 'success'
+                            else:
+                                current_data = []
+                                message = "暂无视频数据或API返回为空"
+                                status = 'no_data'
                         else:
-                            print("❌ API响应中没有视频数据")
                             current_data = []
                             message = "暂无视频数据或API返回为空"
                             status = 'no_data'
