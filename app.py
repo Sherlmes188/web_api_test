@@ -16,14 +16,15 @@ is_production = os.environ.get('RAILWAY_ENVIRONMENT') or os.environ.get('RENDER'
 
 socketio = SocketIO(app, 
                    cors_allowed_origins="*",
-                   async_mode='gevent' if is_production else None,
-                   logger=False if is_production else True,
+                   async_mode='gevent' if is_production else 'threading',
+                   logger=False,
                    engineio_logger=False,
-                   ping_timeout=20,
+                   ping_timeout=60,
                    ping_interval=25,
                    max_http_buffer_size=1000000,
-                   # 生产环境优先使用polling，避免WebSocket连接问题
-                   transports=['polling', 'websocket'] if not is_production else ['polling'])
+                   allow_upgrades=True,
+                   # 生产环境使用更稳定的传输配置
+                   transports=['polling', 'websocket'])
 
 # 全局变量存储实时数据
 current_data = []
@@ -189,10 +190,11 @@ def update_data(from_background=False):
     if not from_background:
         try:
             # 发送WebSocket数据
-            socketio.emit('data_update', data_payload)
+            socketio.emit('data_update', data_payload, broadcast=True)
             print(f"✅ WebSocket数据发送成功")
         except Exception as e:
             print(f"❌ WebSocket数据发送失败: {e}")
+            # 不要因为WebSocket发送失败就中断整个流程
     
     print(f"🔄 数据更新完成于: {datetime.datetime.now()}")
     

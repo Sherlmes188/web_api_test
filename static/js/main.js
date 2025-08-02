@@ -36,10 +36,14 @@ class TikTokAnalyticsDashboard {
         console.log('Initializing socket connection...');
         this.socket = io({
             transports: ['polling', 'websocket'],
-            timeout: 15000,
-            forceNew: true,
+            timeout: 20000,
+            forceNew: false,
             upgrade: true,
-            rememberUpgrade: false
+            rememberUpgrade: true,
+            autoConnect: true,
+            reconnection: true,
+            reconnectionAttempts: 5,
+            reconnectionDelay: 1000
         });
 
         this.socket.on('connect', () => {
