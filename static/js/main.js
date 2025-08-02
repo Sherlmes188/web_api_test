@@ -7,6 +7,7 @@ class TikTokAnalyticsDashboard {
         this.statusMessage = '';
         this.charts = {};
         this.isConnected = false;
+        this.pollingInterval = null; // HTTP轮询定时器
         this.authModalShown = false; // 授权弹窗状态
         
         this.init();
@@ -32,43 +33,48 @@ class TikTokAnalyticsDashboard {
     }
 
     initSocket() {
-        try {
-            this.socket = io();
-            
-            // 连接成功
-            this.socket.on('connect', () => {
-                console.log('WebSocket connected');
-                this.isConnected = true;
-                this.updateConnectionStatus(true);
-            });
+        console.log('Initializing socket connection...');
+        this.socket = io({
+            transports: ['polling', 'websocket'],
+            timeout: 10000,
+            forceNew: true
+        });
 
-            // 连接断开
-            this.socket.on('disconnect', () => {
-                console.log('WebSocket disconnected');
-                this.isConnected = false;
-                this.updateConnectionStatus(false);
-            });
+        this.socket.on('connect', () => {
+            console.log('WebSocket connected');
+            this.isConnected = true;
+            this.updateConnectionStatus(true);
+        });
 
-            // 数据更新
-            this.socket.on('data_update', (response) => {
-                console.log('Data updated via WebSocket:', response);
-                
-                // 处理新的数据结构
-                if (response) {
-                    this.currentData = response.videos || [];
-                    this.updateData(this.currentData);
-                    this.updateStatusMessage(response.status, response.message);
-                    
-                    if (response.status === 'success' && this.currentData.length > 0) {
-                        this.showNotification('数据已更新');
-                    }
-                }
-            });
-
-        } catch (error) {
-            console.error('WebSocket initialization failed:', error);
+        this.socket.on('disconnect', () => {
+            console.log('WebSocket disconnected');
+            this.isConnected = false;
             this.updateConnectionStatus(false);
-        }
+            
+            // WebSocket断开时启动HTTP轮询备选方案
+            this.startHttpPolling();
+        });
+
+        this.socket.on('data_update', (response) => {
+            console.log('Data updated via WebSocket:', response);
+            if (response) {
+                this.currentData = response.videos || [];
+                this.updateData(this.currentData);
+                this.updateStatusMessage(response.status, response.message);
+                if (response.status === 'success' && this.currentData.length > 0) {
+                    this.showNotification('数据已更新');
+                }
+            }
+        });
+
+        this.socket.on('connect_error', (error) => {
+            console.log('WebSocket connection error:', error);
+            this.isConnected = false;
+            this.updateConnectionStatus(false);
+            
+            // 连接错误时启动HTTP轮询
+            this.startHttpPolling();
+        });
     }
 
     bindEvents() {
@@ -642,6 +648,56 @@ class TikTokAnalyticsDashboard {
                 }, 300000); // 5分钟
             }
         }, 3000);
+    }
+
+    startHttpPolling() {
+        if (this.pollingInterval) {
+            return; // 已经在轮询了
+        }
+        
+        console.log('Starting HTTP polling as WebSocket fallback...');
+        
+        // 立即执行一次
+        this.fetchDataViaHttp();
+        
+        // 每30秒轮询一次
+        this.pollingInterval = setInterval(() => {
+            if (!this.isConnected) {
+                this.fetchDataViaHttp();
+            } else {
+                // WebSocket重新连接，停止轮询
+                this.stopHttpPolling();
+            }
+        }, 30000);
+    }
+
+    stopHttpPolling() {
+        if (this.pollingInterval) {
+            clearInterval(this.pollingInterval);
+            this.pollingInterval = null;
+            console.log('Stopped HTTP polling');
+        }
+    }
+
+    async fetchDataViaHttp() {
+        try {
+            const response = await fetch('/api/data');
+            const data = await response.json();
+            
+            console.log('Data fetched via HTTP:', data);
+            
+            if (data.success && data.videos) {
+                this.currentData = data.videos;
+                this.updateData(this.currentData);
+                this.updateStatusMessage(data.status, data.message);
+                
+                if (data.status === 'success' && this.currentData.length > 0) {
+                    this.showNotification('数据已更新 (HTTP)');
+                }
+            }
+        } catch (error) {
+            console.error('HTTP polling error:', error);
+        }
     }
 }
 

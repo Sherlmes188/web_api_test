@@ -110,13 +110,17 @@ def update_data():
                 message = "请配置API密钥并授权TikTok账号"
                 status = 'need_config'
             else:
-                # 检查是否有访问令牌 - 使用全局存储避免session问题
-                access_token = getattr(app, '_access_token', None)
+                # 检查是否有访问令牌 - 同时检查session和app对象
+                access_token = getattr(app, '_access_token', None) or session.get('access_token')
+                print(f"🔑 授权检查: app._access_token存在={hasattr(app, '_access_token')}, session access_token存在={'access_token' in session}")
+                
                 if not access_token:
                     current_data = []
                     message = "需要授权TikTok账号才能获取数据"
                     status = 'need_auth'
+                    print("❌ 未发现访问令牌")
                 else:
+                    print(f"✅ 找到访问令牌: {access_token[:20]}...")
                     # 用户已授权，获取实际数据
                     try:
                         from oauth_handler import TikTokOfficialAPI
