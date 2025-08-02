@@ -13,6 +13,9 @@ app = Flask(__name__)
 app.config['SECRET_KEY'] = 'tiktok_analytics_secret_key'
 socketio = SocketIO(app, cors_allowed_origins="*")
 
+# 为WSGI服务器提供应用入口点
+application = socketio
+
 # 初始化TikTok数据获取器
 tiktok_fetcher = TikTokDataFetcher(api_key=Config.get_api_key())
 
@@ -664,4 +667,10 @@ if __name__ == '__main__':
     is_production = os.environ.get('RAILWAY_ENVIRONMENT') or os.environ.get('RENDER') or os.environ.get('HEROKU')
     
     # 启动Flask-SocketIO应用
-    socketio.run(app, debug=not is_production, host='0.0.0.0', port=port) 
+    if is_production:
+        # 生产环境：让gunicorn处理，这里不应该执行到
+        print("生产环境应使用gunicorn启动，而不是运行到这里")
+        app.run(host='0.0.0.0', port=port)
+    else:
+        # 开发环境：使用内置服务器
+        socketio.run(app, debug=True, host='0.0.0.0', port=port, allow_unsafe_werkzeug=True) 
