@@ -175,7 +175,7 @@ def update_data():
         message = f"数据获取失败: {str(e)}"
         status = 'error'
     
-    # 构建完整的数据结构
+    # 构造数据负载
     data_payload = {
         'videos': current_data,
         'status': status,
@@ -183,9 +183,18 @@ def update_data():
         'timestamp': datetime.datetime.now().isoformat()
     }
     
-    # 通过WebSocket发送数据
-    socketio.emit('data_update', data_payload)
-    print(f"数据更新于: {datetime.datetime.now()}")
+    print(f"📤 准备发送数据: {len(current_data)} 条视频数据, 状态: {status}")
+    
+    try:
+        # 发送WebSocket数据
+        socketio.emit('data_update', data_payload)
+        print(f"✅ WebSocket数据发送成功")
+    except Exception as e:
+        print(f"❌ WebSocket数据发送失败: {e}")
+    
+    print(f"🔄 数据更新完成于: {datetime.datetime.now()}")
+    
+    return current_data, status, message
 
 @app.route('/')
 def index():
@@ -234,97 +243,49 @@ def auth_test():
 
 @app.route('/api/data')
 def get_data():
-    """获取当前数据的API端点"""
+    """获取当前数据"""
     try:
-        api_type = Config.get_api_type()
+        # 触发数据更新
+        data, status, message = update_data()
         
-        if api_type == 'official':
-            # 使用官方API
-            if not Config.has_official_api_config():
-                return jsonify({
-                    'videos': [],
-                    'status': 'need_config',
-                    'message': '请配置API密钥并授权TikTok账号',
-                    'timestamp': datetime.datetime.now().isoformat()
-                })
-            else:
-                # 检查是否有访问令牌
-                access_token = getattr(app, '_access_token', None) or session.get('access_token')
-                if not access_token:
-                    return jsonify({
-                        'videos': [],
-                        'status': 'need_auth',
-                        'message': '需要授权TikTok账号才能获取数据',
-                        'timestamp': datetime.datetime.now().isoformat()
-                    })
-                else:
-                    # 用户已授权，获取实际数据
-                    try:
-                        from oauth_handler import TikTokOfficialAPI
-                        api = TikTokOfficialAPI(access_token)
-                        
-                        # 获取用户视频数据
-                        videos_response = api.get_user_videos(count=20)
-                        if videos_response.get('data') and videos_response['data'].get('videos'):
-                            raw_videos = videos_response['data']['videos']
-                            video_data = api.process_video_analytics(raw_videos)
-                            return jsonify({
-                                'videos': video_data,
-                                'status': 'success',
-                                'message': f'成功获取 {len(video_data)} 个视频数据',
-                                'timestamp': datetime.datetime.now().isoformat()
-                            })
-                        else:
-                            return jsonify({
-                                'videos': [],
-                                'status': 'no_data',
-                                'message': '暂无视频数据',
-                                'timestamp': datetime.datetime.now().isoformat()
-                            })
-                    except Exception as e:
-                        print(f"获取官方API数据失败: {e}")
-                        return jsonify({
-                            'videos': [],
-                            'status': 'error',
-                            'message': f'获取数据失败: {str(e)}',
-                            'timestamp': datetime.datetime.now().isoformat()
-                        })
-        
-        elif api_type == 'third_party':
-            return jsonify({
-                'videos': [],
-                'status': 'not_implemented',
-                'message': '第三方API功能暂未实现',
-                'timestamp': datetime.datetime.now().isoformat()
-            })
-        
-        else:
-            # 未配置API
-            return jsonify({
-                'videos': [],
-                'status': 'no_config',
-                'message': '请先配置API密钥',
-                'timestamp': datetime.datetime.now().isoformat()
-            })
-            
-    except Exception as e:
-        print(f"Error in get_data: {e}")
         return jsonify({
+            'success': True,
+            'videos': data,
+            'status': status,
+            'message': message,
+            'timestamp': datetime.datetime.now().isoformat()
+        })
+    except Exception as e:
+        print(f"获取数据API错误: {e}")
+        return jsonify({
+            'success': False,
             'videos': [],
             'status': 'error',
             'message': f'获取数据失败: {str(e)}',
             'timestamp': datetime.datetime.now().isoformat()
-        }), 500
+        })
 
 @app.route('/api/refresh')
 def refresh_data():
     """手动刷新数据"""
     try:
-        update_data()
-        return jsonify({'status': 'success', 'message': '数据已刷新'})
+        data, status, message = update_data()
+        return jsonify({
+            'success': True,
+            'videos': data,
+            'status': status,
+            'message': message,
+            'timestamp': datetime.datetime.now().isoformat()
+        })
     except Exception as e:
-        print(f"Error in refresh_data: {e}")
-        return jsonify({'status': 'error', 'message': f'刷新失败: {str(e)}'}), 500
+        print(f"刷新数据错误: {e}")
+        return jsonify({
+            'success': False,
+            'videos': [],
+            'status': 'error',
+            'message': f'刷新失败: {str(e)}',
+            'timestamp': datetime.datetime.now().isoformat()
+        })
 
 @app.route('/auth')
 def authorize():
@@ -809,11 +770,16 @@ def generate_display_api_demo_data():
 
 def schedule_updates():
     """定时任务调度器"""
-    schedule.every(Config.DATA_UPDATE_INTERVAL).seconds.do(update_data)  # 使用配置的更新间隔
-    
+    print("🔄 定时更新任务启动")
     while True:
-        schedule.run_pending()
-        time.sleep(1)
+        try:
+            # 每30秒更新一次数据
+            time.sleep(30)
+            print("⏰ 执行定时数据更新...")
+            update_data()  # 不需要接收返回值，因为数据通过WebSocket发送
+        except Exception as e:
+            print(f"定时更新任务异常: {e}")
+            time.sleep(60)  # 出错时等待更长时间
 
 if __name__ == '__main__':
     import os
