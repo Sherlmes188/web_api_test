@@ -655,6 +655,25 @@ def auth_status():
     
     return jsonify(status)
 
+@app.route('/api/test_api_endpoints')
+def test_api_endpoints():
+    """测试TikTok API端点"""
+    try:
+        access_token = getattr(app, '_access_token', None) or session.get('access_token')
+        if not access_token:
+            return jsonify({'error': '需要先授权'}), 401
+        
+        from oauth_handler import TikTokOfficialAPI
+        api = TikTokOfficialAPI(access_token)
+        test_results = api.test_api_endpoints()
+        
+        return jsonify({
+            'success': True,
+            'test_results': test_results
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 @socketio.on('connect')
 def handle_connect():
     """处理WebSocket连接"""

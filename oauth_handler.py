@@ -234,12 +234,29 @@ class TikTokOfficialAPI:
             视频列表响应
         """
         # 根据Display API文档构建请求参数
-        params = {
-            'max_count': min(count, 20)  # Display API使用max_count参数，最多20个
-        }
+        # 尝试多种参数组合
+        params = {}
+        
+        # 可能需要fields参数来指定返回的字段
+        fields = [
+            'id',
+            'title', 
+            'create_time',
+            'cover_image_url',
+            'share_url',
+            'duration'
+        ]
+        params['fields'] = ','.join(fields)
+        
+        # 尝试不同的计数参数名称
+        if count:
+            # 尝试常见的参数名称
+            params['count'] = min(count, 20)  # 可能是count而不是max_count
         
         if cursor:
             params['cursor'] = cursor
+        
+        print(f"调用Display API with params: {params}")
         
         try:
             response = requests.get(
@@ -247,9 +264,29 @@ class TikTokOfficialAPI:
                 headers=self.headers,
                 params=params
             )
+            print(f"API响应状态码: {response.status_code}")
+            print(f"API响应头: {dict(response.headers)}")
+            print(f"API响应内容: {response.text[:500]}...")
+            
+            if response.status_code == 404:
+                # 如果404，尝试不带参数的请求
+                print("尝试不带参数的请求...")
+                response = requests.get(
+                    f"{self.base_url}/v2/video/list/",
+                    headers=self.headers
+                )
+                print(f"无参数请求状态码: {response.status_code}")
+                print(f"无参数请求响应: {response.text[:500]}...")
+            
             response.raise_for_status()
             return response.json()
+            
         except requests.RequestException as e:
+            print(f"API请求详细错误: {e}")
+            if hasattr(e, 'response') and e.response is not None:
+                print(f"错误响应内容: {e.response.text}")
+                print(f"错误响应状态码: {e.response.status_code}")
+                print(f"错误响应头: {dict(e.response.headers)}")
             raise Exception(f"获取视频列表失败: {e}")
     
     def get_video_info(self, video_ids: list, fields: list = None) -> Dict:
@@ -375,6 +412,58 @@ class TikTokOfficialAPI:
             from datetime import datetime
             return datetime.fromtimestamp(timestamp)
         return timestamp
+
+    def test_api_endpoints(self) -> Dict:
+        """
+        测试不同的API端点来诊断问题
+        """
+        test_results = {}
+        
+        # 测试用户信息端点
+        try:
+            user_response = requests.get(
+                f"{self.base_url}/v2/user/info/",
+                headers=self.headers,
+                params={'fields': 'open_id,display_name'}
+            )
+            test_results['user_info'] = {
+                'status_code': user_response.status_code,
+                'success': user_response.status_code == 200,
+                'response': user_response.text[:200]
+            }
+        except Exception as e:
+            test_results['user_info'] = {'error': str(e)}
+        
+        # 测试视频列表端点 - 不同参数组合
+        test_params = [
+            {},  # 无参数
+            {'fields': 'id,title'},  # 只有fields
+            {'count': 10},  # 只有count
+            {'max_count': 10},  # max_count
+            {'fields': 'id,title', 'count': 10},  # fields + count
+            {'fields': 'id,title', 'max_count': 10},  # fields + max_count
+        ]
+        
+        for i, params in enumerate(test_params):
+            try:
+                video_response = requests.get(
+                    f"{self.base_url}/v2/video/list/",
+                    headers=self.headers,
+                    params=params
+                )
+                test_results[f'video_list_{i}'] = {
+                    'params': params,
+                    'status_code': video_response.status_code,
+                    'success': video_response.status_code == 200,
+                    'response': video_response.text[:200]
+                }
+            except Exception as e:
+                test_results[f'video_list_{i}'] = {
+                    'params': params,
+                    'error': str(e)
+                }
+        
+        return test_results
 
 # 示例使用
 if __name__ == "__main__":
