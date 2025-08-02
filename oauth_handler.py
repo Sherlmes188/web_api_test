@@ -467,48 +467,61 @@ class TikTokOfficialAPI:
         except Exception as e:
             test_results['user_info'] = {'error': str(e)}
         
-        # 尝试不同的视频端点路径和方法
-        video_endpoints = [
-            ('GET', '/v2/video/list/', {}),
-            ('POST', '/v2/video/list/', {}),
-            ('GET', '/v2/video/query/', {}),
-            ('POST', '/v2/video/query/', {}),
-            ('GET', '/v2/videos/list/', {}),
-            ('POST', '/v2/videos/list/', {}),
-            ('GET', '/v2/user/videos/', {}),
-            ('POST', '/v2/user/videos/', {}),
-        ]
+        # 测试修复后的视频列表端点 - 包含正确的fields参数
+        try:
+            # 测试修复后的POST /v2/video/list/ 方法
+            video_data = {
+                'fields': 'id,title,create_time,cover_image_url,share_url,duration',
+                'max_count': 10
+            }
+            
+            video_response = requests.post(
+                f"{self.base_url}/v2/video/list/",
+                headers=self.headers,
+                json=video_data
+            )
+            
+            test_results['fixed_video_list'] = {
+                'method': 'POST',
+                'endpoint': '/v2/video/list/',
+                'data': video_data,
+                'status_code': video_response.status_code,
+                'success': video_response.status_code == 200,
+                'response': video_response.text[:400]
+            }
+        except Exception as e:
+            test_results['fixed_video_list'] = {
+                'method': 'POST',
+                'endpoint': '/v2/video/list/',
+                'error': str(e)
+            }
         
-        for i, (method, endpoint, params) in enumerate(video_endpoints):
-            try:
-                if method == 'GET':
-                    video_response = requests.get(
-                        f"{self.base_url}{endpoint}",
-                        headers=self.headers,
-                        params=params
-                    )
-                else:  # POST
-                    video_response = requests.post(
-                        f"{self.base_url}{endpoint}",
-                        headers=self.headers,
-                        json=params
-                    )
-                
-                test_results[f'video_endpoint_{i}'] = {
-                    'method': method,
-                    'endpoint': endpoint,
-                    'params': params,
-                    'status_code': video_response.status_code,
-                    'success': video_response.status_code == 200,
-                    'response': video_response.text[:300]
-                }
-            except Exception as e:
-                test_results[f'video_endpoint_{i}'] = {
-                    'method': method,
-                    'endpoint': endpoint,
-                    'params': params,
-                    'error': str(e)
-                }
+        # 也测试video/query端点
+        try:
+            query_data = {
+                'fields': 'id,title,create_time,cover_image_url,share_url,duration'
+            }
+            
+            query_response = requests.post(
+                f"{self.base_url}/v2/video/query/",
+                headers=self.headers,
+                json=query_data
+            )
+            
+            test_results['fixed_video_query'] = {
+                'method': 'POST',
+                'endpoint': '/v2/video/query/',
+                'data': query_data,
+                'status_code': query_response.status_code,
+                'success': query_response.status_code == 200,
+                'response': query_response.text[:400]
+            }
+        except Exception as e:
+            test_results['fixed_video_query'] = {
+                'method': 'POST',
+                'endpoint': '/v2/video/query/',
+                'error': str(e)
+            }
         
         return test_results
 
