@@ -3,7 +3,7 @@ import os
 # 服务器配置
 bind = f"0.0.0.0:{os.environ.get('PORT', 5000)}"
 workers = 1  # SocketIO需要单worker模式
-worker_class = "eventlet"  # 异步worker类，支持WebSocket
+worker_class = "gevent"  # 使用gevent，对SocketIO兼容性更好
 worker_connections = 1000
 
 # 日志配置

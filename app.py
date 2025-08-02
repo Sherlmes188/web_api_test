@@ -12,27 +12,18 @@ from config import Config
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'tiktok_analytics_secret_key'
 
-# 自适应SocketIO配置
+# 简化的SocketIO配置 - 让它自动选择最佳传输方式
 import os
 is_production = os.environ.get('RAILWAY_ENVIRONMENT') or os.environ.get('RENDER') or os.environ.get('HEROKU')
 
-if is_production:
-    # 生产环境：使用eventlet
-    socketio = SocketIO(app, 
-                       cors_allowed_origins="*",
-                       async_mode='eventlet',
-                       logger=False,
-                       engineio_logger=False,
-                       ping_timeout=60,
-                       ping_interval=25)
-else:
-    # 开发环境：自动检测最佳模式
-    socketio = SocketIO(app, 
-                       cors_allowed_origins="*",
-                       logger=True,
-                       engineio_logger=False,
-                       ping_timeout=60,
-                       ping_interval=25)
+socketio = SocketIO(app, 
+                   cors_allowed_origins="*",
+                   async_mode='gevent' if is_production else None,  # 生产环境使用gevent
+                   logger=False if is_production else True,
+                   engineio_logger=False,
+                   ping_timeout=120,  # 增加超时时间
+                   ping_interval=60,  # 增加ping间隔
+                   transports=['polling', 'websocket'])  # 明确指定传输方式优先级
 
 # 为WSGI服务器提供应用入口点
 application = socketio
@@ -231,20 +222,72 @@ def get_data():
     try:
         api_type = Config.get_api_type()
         
-        if api_type == 'none':
-            # 未配置API，返回空数据和状态信息
+        if api_type == 'official':
+            # 使用官方API
+            if not Config.has_official_api_config():
+                return jsonify({
+                    'videos': [],
+                    'status': 'need_config',
+                    'message': '请配置API密钥并授权TikTok账号',
+                    'timestamp': datetime.datetime.now().isoformat()
+                })
+            else:
+                # 检查是否有访问令牌
+                access_token = getattr(app, '_access_token', None) or session.get('access_token')
+                if not access_token:
+                    return jsonify({
+                        'videos': [],
+                        'status': 'need_auth',
+                        'message': '需要授权TikTok账号才能获取数据',
+                        'timestamp': datetime.datetime.now().isoformat()
+                    })
+                else:
+                    # 用户已授权，获取实际数据
+                    try:
+                        from oauth_handler import TikTokOfficialAPI
+                        api = TikTokOfficialAPI(access_token)
+                        
+                        # 获取用户视频数据
+                        videos_response = api.get_user_videos(count=20)
+                        if videos_response.get('data') and videos_response['data'].get('videos'):
+                            raw_videos = videos_response['data']['videos']
+                            video_data = api.process_video_analytics(raw_videos)
+                            return jsonify({
+                                'videos': video_data,
+                                'status': 'success',
+                                'message': f'成功获取 {len(video_data)} 个视频数据',
+                                'timestamp': datetime.datetime.now().isoformat()
+                            })
+                        else:
+                            return jsonify({
+                                'videos': [],
+                                'status': 'no_data',
+                                'message': '暂无视频数据',
+                                'timestamp': datetime.datetime.now().isoformat()
+                            })
+                    except Exception as e:
+                        print(f"获取官方API数据失败: {e}")
+                        return jsonify({
+                            'videos': [],
+                            'status': 'error',
+                            'message': f'获取数据失败: {str(e)}',
+                            'timestamp': datetime.datetime.now().isoformat()
+                        })
+        
+        elif api_type == 'third_party':
+            return jsonify({
+                'videos': [],
+                'status': 'not_implemented',
+                'message': '第三方API功能暂未实现',
+                'timestamp': datetime.datetime.now().isoformat()
+            })
+        
+        else:
+            # 未配置API
             return jsonify({
                 'videos': [],
                 'status': 'no_config',
                 'message': '请先配置API密钥',
-                'timestamp': datetime.datetime.now().isoformat()
-            })
-        else:
-            # 已配置API，返回空数据等待授权
-            return jsonify({
-                'videos': [],
-                'status': 'need_auth',
-                'message': '需要授权TikTok账号才能获取数据',
                 'timestamp': datetime.datetime.now().isoformat()
             })
             
