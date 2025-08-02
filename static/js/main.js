@@ -36,14 +36,18 @@ class TikTokAnalyticsDashboard {
         console.log('Initializing socket connection...');
         this.socket = io({
             transports: ['polling', 'websocket'],
-            timeout: 10000,
-            forceNew: true
+            timeout: 15000,
+            forceNew: true,
+            upgrade: true,
+            rememberUpgrade: false
         });
 
         this.socket.on('connect', () => {
             console.log('WebSocket connected');
             this.isConnected = true;
             this.updateConnectionStatus(true);
+            // 停止HTTP轮询（如果正在运行）
+            this.stopHttpPolling();
         });
 
         this.socket.on('disconnect', () => {
@@ -73,6 +77,18 @@ class TikTokAnalyticsDashboard {
             this.updateConnectionStatus(false);
             
             // 连接错误时启动HTTP轮询
+            this.startHttpPolling();
+        });
+
+        // 添加重连错误处理
+        this.socket.on('reconnect_error', (error) => {
+            console.log('WebSocket reconnect error:', error);
+            this.startHttpPolling();
+        });
+
+        // 添加重连失败处理
+        this.socket.on('reconnect_failed', () => {
+            console.log('WebSocket reconnect failed, falling back to HTTP polling');
             this.startHttpPolling();
         });
     }

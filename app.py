@@ -19,9 +19,11 @@ socketio = SocketIO(app,
                    async_mode='gevent' if is_production else None,
                    logger=False if is_production else True,
                    engineio_logger=False,
-                   ping_timeout=120,
-                   ping_interval=60,
-                   transports=['polling', 'websocket'])
+                   ping_timeout=20,
+                   ping_interval=25,
+                   max_http_buffer_size=1000000,
+                   # 生产环境优先使用polling，避免WebSocket连接问题
+                   transports=['polling', 'websocket'] if not is_production else ['polling'])
 
 # 全局变量存储实时数据
 current_data = []
@@ -88,7 +90,7 @@ def generate_sample_data():
     ]
     return sample_videos
 
-def update_data():
+def update_data(from_background=False):
     """更新数据并通过WebSocket发送"""
     global current_data
     
@@ -102,8 +104,17 @@ def update_data():
                 message = "请配置API密钥并授权TikTok账号"
                 status = 'need_config'
             else:
-                # 检查是否有访问令牌 - 同时检查session和app对象
-                access_token = getattr(app, '_access_token', None) or session.get('access_token')
+                # 检查是否有访问令牌 - 优先使用app对象中的令牌（避免session上下文问题）
+                access_token = getattr(app, '_access_token', None)
+                
+                # 如果不是后台任务且没有app令牌，尝试从session获取
+                if not access_token and not from_background:
+                    try:
+                        from flask import session
+                        access_token = session.get('access_token')
+                    except RuntimeError:
+                        # 在请求上下文之外，忽略session访问
+                        pass
                 
                 if not access_token:
                     current_data = []
@@ -174,12 +185,14 @@ def update_data():
     
     print(f"📤 准备发送数据: {len(current_data)} 条视频数据, 状态: {status}")
     
-    try:
-        # 发送WebSocket数据
-        socketio.emit('data_update', data_payload)
-        print(f"✅ WebSocket数据发送成功")
-    except Exception as e:
-        print(f"❌ WebSocket数据发送失败: {e}")
+    # 只有在有数据且不是后台任务时才发送WebSocket（避免连接问题）
+    if not from_background:
+        try:
+            # 发送WebSocket数据
+            socketio.emit('data_update', data_payload)
+            print(f"✅ WebSocket数据发送成功")
+        except Exception as e:
+            print(f"❌ WebSocket数据发送失败: {e}")
     
     print(f"🔄 数据更新完成于: {datetime.datetime.now()}")
     
@@ -646,8 +659,8 @@ def handle_connect():
     
     # 发送当前数据给新连接的客户端
     try:
-        # 获取当前数据
-        data, status, message = update_data()
+        # 获取当前数据（非后台任务）
+        data, status, message = update_data(from_background=False)
         
         # 构造数据负载
         data_payload = {
@@ -661,6 +674,17 @@ def handle_connect():
         print(f"✅ 向新连接客户端发送数据: {len(data)} 条记录")
     except Exception as e:
         print(f"❌ 发送初始数据失败: {e}")
+        # 发送错误状态给客户端
+        try:
+            error_payload = {
+                'videos': [],
+                'status': 'error',
+                'message': '连接时获取数据失败',
+                'timestamp': datetime.datetime.now().isoformat()
+            }
+            emit('data_update', error_payload)
+        except Exception as emit_error:
+            print(f"❌ 发送错误状态也失败: {emit_error}")
 
 @socketio.on('disconnect')
 def handle_disconnect():
@@ -670,7 +694,10 @@ def handle_disconnect():
 @socketio.on('request_update')
 def handle_request_update():
     """处理客户端请求数据更新"""
-    update_data()
+    try:
+        update_data(from_background=False)
+    except Exception as e:
+        print(f"❌ 客户端请求更新失败: {e}")
 
 
 
@@ -740,7 +767,8 @@ def schedule_updates():
             # 每30秒更新一次数据
             time.sleep(30)
             print("⏰ 执行定时数据更新...")
-            update_data()  # 不需要接收返回值，因为数据通过WebSocket发送
+            # 使用from_background=True避免Flask上下文问题和WebSocket发送
+            update_data(from_background=True)
         except Exception as e:
             print(f"定时更新任务异常: {e}")
             time.sleep(60)  # 出错时等待更长时间
