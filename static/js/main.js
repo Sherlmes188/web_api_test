@@ -162,7 +162,7 @@ class TikTokAnalyticsDashboard {
         // 计算统计数据
         const totalVideos = data.length;
         const totalViews = data.reduce((sum, item) => sum + (item.views || 0), 0);
-        const totalFollowers = data.reduce((sum, item) => sum + (item.new_followers || 0), 0);
+        const totalFollowers = data.reduce((sum, item) => sum + (item.likes || 0), 0); // 使用点赞数代替关注者数
         
         // 计算平均完播率
         const completionRates = data.map(item => {
@@ -180,7 +180,7 @@ class TikTokAnalyticsDashboard {
         this.updateElement('totalVideos', totalVideos);
         this.updateElement('totalViews', this.formatNumber(totalViews));
         this.updateElement('avgCompletionRate', `${avgCompletionRate}%`);
-        this.updateElement('totalFollowers', totalFollowers);
+        this.updateElement('totalFollowers', this.formatNumber(totalFollowers));
     }
 
     updateTable() {
@@ -228,36 +228,37 @@ class TikTokAnalyticsDashboard {
             ? item.completion_rate 
             : `${item.completion_rate}%`;
 
-        // 处理服务标签样式
-        const serviceClass = item.service === 'IMX.TOOLS' ? 'service-imx' : 'service-dna';
-        
-        // 处理状态显示
-        const statusHtml = item.performance === 1 
-            ? '<span class="status-indicator"><span class="status-dot active"></span>活跃</span>'
-            : '<span class="status-indicator"><span class="status-dot inactive"></span>非活跃</span>';
+        // 格式化发布时间
+        const publishDate = item.publish_time ? 
+            new Date(item.publish_time).toLocaleDateString('zh-CN') : 
+            '未知时间';
 
         row.innerHTML = `
             <td>
-                <a href="${item.video_link}" target="_blank" class="video-link">
-                    ${this.truncateUrl(item.video_link)}
+                <a href="${item.share_url || '#'}" target="_blank" class="video-link">
+                    ${this.truncateUrl(item.share_url)}
                 </a>
             </td>
             <td>
-                <span class="product-tag">${item.product}</span>
+                <span class="product-tag">${item.description || '无描述'}</span>
             </td>
             <td>
-                <span class="badge service-badge ${serviceClass}">${item.service}</span>
+                <span class="badge service-badge service-tiktok">TikTok</span>
             </td>
-            <td>${item.publish_date}</td>
-            <td class="number-cell">${this.formatNumber(item.views)}</td>
-            <td class="number-cell">${item.avg_watch_time}s</td>
-            <td class="number-cell">${item.new_followers}</td>
+            <td>${publishDate}</td>
+            <td class="number-cell">${this.formatNumber(item.views || 0)}</td>
+            <td class="number-cell">${item.avg_watch_time || 0}s</td>
+            <td class="number-cell">${this.formatNumber(item.likes || 0)}</td>
             <td class="percentage-cell ${this.getPercentageClass(completionRate)}">${completionRate}</td>
-            <td class="number-cell">${item.bounce_rate}</td>
-            <td class="number-cell">${item.watch_duration}</td>
-            <td class="number-cell">${item.gmv_max_views}</td>
-            <td class="number-cell">${this.calculateDuration(item)}</td>
-            <td>${statusHtml}</td>
+            <td class="number-cell">${item.bounce_rate || 0}%</td>
+            <td class="number-cell">${item.duration || 0}s</td>
+            <td class="number-cell">${this.formatNumber(item.comments || 0)}</td>
+            <td class="number-cell">${item.engagement_rate || 0}%</td>
+            <td>
+                <span class="status-indicator">
+                    <span class="status-dot active"></span>活跃
+                </span>
+            </td>
         `;
 
         return row;
@@ -347,41 +348,56 @@ class TikTokAnalyticsDashboard {
     }
 
     updateCharts() {
-        this.updateViewsChart();
-        this.updateCompletionChart();
+        this.updateViewsChart(this.currentData);
+        this.updateCompletionChart(this.currentData);
     }
 
-    updateViewsChart() {
-        if (!this.charts.views) return;
+    updateViewsChart(data) {
+        if (!this.charts.views || !data || data.length === 0) return;
 
-        const labels = this.currentData.map(item => {
-            const date = new Date(item.publish_date);
-            return `${date.getMonth() + 1}/${date.getDate()}`;
-        });
+        // 按发布时间排序
+        const sortedData = [...data].sort((a, b) => 
+            new Date(a.publish_time || 0) - new Date(b.publish_time || 0)
+        );
 
-        const views = this.currentData.map(item => item.views);
+        const labels = sortedData.map((item, index) => 
+            item.publish_time ? 
+                new Date(item.publish_time).toLocaleDateString('zh-CN') : 
+                `视频 ${index + 1}`
+        );
+        
+        const viewsData = sortedData.map(item => item.views || 0);
 
         this.charts.views.data.labels = labels;
-        this.charts.views.data.datasets[0].data = views;
+        this.charts.views.data.datasets[0].data = viewsData;
         this.charts.views.update();
     }
 
-    updateCompletionChart() {
-        if (!this.charts.completion) return;
+    updateCompletionChart(data) {
+        if (!this.charts.completion || !data || data.length === 0) return;
 
-        // 计算完播率分布
-        const completionRates = this.currentData.map(item => {
-            const rate = typeof item.completion_rate === 'string' 
-                ? parseFloat(item.completion_rate.replace('%', '')) 
-                : item.completion_rate || 0;
-            return rate;
-        }).filter(rate => !isNaN(rate));
+        // 处理完播率数据
+        const completionRates = data.map(item => {
+            const rate = item.completion_rate || 0;
+            return typeof rate === 'string' ? parseFloat(rate.replace('%', '')) : rate;
+        });
 
-        const high = completionRates.filter(rate => rate >= 25).length;
-        const medium = completionRates.filter(rate => rate >= 15 && rate < 25).length;
-        const low = completionRates.filter(rate => rate < 15).length;
+        // 分组统计
+        const ranges = [
+            { label: '0-20%', min: 0, max: 20, count: 0 },
+            { label: '21-40%', min: 21, max: 40, count: 0 },
+            { label: '41-60%', min: 41, max: 60, count: 0 },
+            { label: '61-80%', min: 61, max: 80, count: 0 },
+            { label: '81-100%', min: 81, max: 100, count: 0 }
+        ];
 
-        this.charts.completion.data.datasets[0].data = [high, medium, low];
+        completionRates.forEach(rate => {
+            const range = ranges.find(r => rate >= r.min && rate <= r.max);
+            if (range) range.count++;
+        });
+
+        this.charts.completion.data.labels = ranges.map(r => r.label);
+        this.charts.completion.data.datasets[0].data = ranges.map(r => r.count);
         this.charts.completion.update();
     }
 
@@ -469,6 +485,10 @@ class TikTokAnalyticsDashboard {
     }
 
     truncateUrl(url) {
+        // 检查url是否存在且不为undefined
+        if (!url || typeof url !== 'string') {
+            return '暂无链接';
+        }
         if (url.length > 30) {
             return url.substring(0, 27) + '...';
         }
