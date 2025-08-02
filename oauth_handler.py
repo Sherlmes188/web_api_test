@@ -401,10 +401,10 @@ class TikTokOfficialAPI:
             print(f"   - 原始字段: {list(video.keys())}")
             
             # Display API中的统计数据可能在不同字段中
-            views = 0  # Display API可能不提供view_count
-            likes = 0  # Display API可能不提供like_count
-            comments = 0  # Display API可能不提供comment_count
-            shares = 0  # Display API可能不提供share_count
+            views = 0  # Display API不提供view_count
+            likes = 0  # Display API不提供like_count
+            comments = 0  # Display API不提供comment_count
+            shares = 0  # Display API不提供share_count
             
             # 尝试从可能的字段获取统计数据
             if 'statistics' in video:
@@ -415,12 +415,8 @@ class TikTokOfficialAPI:
                 shares = stats.get('share_count', 0)
                 print(f"   - 找到统计数据: views={views}, likes={likes}, comments={comments}, shares={shares}")
             else:
-                print(f"   - 没有统计数据，使用模拟数值")
-                # 由于Display API没有统计数据，使用合理的模拟值
-                views = 1000 + i * 500  # 模拟观看数
-                likes = views // 20     # 模拟点赞数
-                comments = likes // 10  # 模拟评论数
-                shares = comments // 5  # 模拟分享数
+                print(f"   - Display API不提供统计数据，显示为0")
+                # Display API不提供统计数据，保持为0值
             
             # 计算参与度 (如果有统计数据的话)
             engagement_rate = 0
@@ -465,11 +461,17 @@ class TikTokOfficialAPI:
         return analytics_data
     
     def _parse_timestamp(self, timestamp):
-        """解析时间戳"""
+        """解析时间戳并返回ISO格式字符串"""
         if isinstance(timestamp, (int, float)):
             from datetime import datetime
-            return datetime.fromtimestamp(timestamp)
-        return timestamp
+            try:
+                dt = datetime.fromtimestamp(timestamp)
+                return dt.isoformat()  # 返回ISO格式字符串而不是datetime对象
+            except (ValueError, OSError):
+                return None
+        elif isinstance(timestamp, str):
+            return timestamp  # 已经是字符串格式
+        return None
 
     def test_api_endpoints(self) -> Dict:
         """

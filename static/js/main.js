@@ -168,7 +168,7 @@ class TikTokAnalyticsDashboard {
         // 计算统计数据
         const totalVideos = data.length;
         const totalViews = data.reduce((sum, item) => sum + (item.views || 0), 0);
-        const totalFollowers = data.reduce((sum, item) => sum + (item.likes || 0), 0); // 使用点赞数代替关注者数
+        const totalLikes = data.reduce((sum, item) => sum + (item.likes || 0), 0);
         
         // 计算平均完播率
         const completionRates = data.map(item => {
@@ -182,11 +182,22 @@ class TikTokAnalyticsDashboard {
             ? (completionRates.reduce((sum, rate) => sum + rate, 0) / completionRates.length).toFixed(1)
             : 0;
 
-        // 更新DOM元素
+        // 更新DOM元素 - 如果没有真实数据则显示相应提示
         this.updateElement('totalVideos', totalVideos);
-        this.updateElement('totalViews', this.formatNumber(totalViews));
+        
+        if (totalViews === 0 && totalVideos > 0) {
+            this.updateElement('totalViews', '统计不可用');
+        } else {
+            this.updateElement('totalViews', this.formatNumber(totalViews));
+        }
+        
         this.updateElement('avgCompletionRate', `${avgCompletionRate}%`);
-        this.updateElement('totalFollowers', this.formatNumber(totalFollowers));
+        
+        if (totalLikes === 0 && totalVideos > 0) {
+            this.updateElement('totalFollowers', '统计不可用');
+        } else {
+            this.updateElement('totalFollowers', this.formatNumber(totalLikes));
+        }
     }
 
     updateTable() {
@@ -252,13 +263,13 @@ class TikTokAnalyticsDashboard {
                 <span class="badge service-badge service-tiktok">TikTok</span>
             </td>
             <td>${publishDate}</td>
-            <td class="number-cell">${this.formatNumber(item.views || 0)}</td>
+            <td class="number-cell">${item.views > 0 ? this.formatNumber(item.views) : '统计不可用'}</td>
             <td class="number-cell">${item.avg_watch_time || 0}s</td>
-            <td class="number-cell">${this.formatNumber(item.likes || 0)}</td>
+            <td class="number-cell">${item.likes > 0 ? this.formatNumber(item.likes) : '统计不可用'}</td>
             <td class="percentage-cell ${this.getPercentageClass(completionRate)}">${completionRate}</td>
             <td class="number-cell">${item.bounce_rate || 0}%</td>
             <td class="number-cell">${item.duration || 0}s</td>
-            <td class="number-cell">${this.formatNumber(item.comments || 0)}</td>
+            <td class="number-cell">${item.comments > 0 ? this.formatNumber(item.comments) : '统计不可用'}</td>
             <td class="number-cell">${item.engagement_rate || 0}%</td>
             <td>
                 <span class="status-indicator">

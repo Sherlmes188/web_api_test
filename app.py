@@ -657,17 +657,30 @@ def test_api_endpoints():
 @socketio.on('connect')
 def handle_connect():
     """处理WebSocket连接"""
-    print('客户端已连接')
+    print("客户端已连接")
+    
     # 发送当前数据给新连接的客户端
-    global current_data
-    if not current_data:
-        current_data = generate_sample_data()
-    emit('data_update', {'data': current_data})
+    try:
+        # 获取当前数据
+        data, status, message = update_data()
+        
+        # 构造数据负载
+        data_payload = {
+            'videos': data,
+            'status': status,
+            'message': message,
+            'timestamp': datetime.datetime.now().isoformat()
+        }
+        
+        emit('data_update', data_payload)
+        print(f"✅ 向新连接客户端发送数据: {len(data)} 条记录")
+    except Exception as e:
+        print(f"❌ 发送初始数据失败: {e}")
 
 @socketio.on('disconnect')
 def handle_disconnect():
     """处理WebSocket断开连接"""
-    print('客户端已断开连接')
+    print("客户端已断开连接")
 
 @socketio.on('request_update')
 def handle_request_update():
