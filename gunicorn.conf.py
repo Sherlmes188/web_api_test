@@ -7,7 +7,7 @@ worker_class = "eventlet"  # 异步worker类，支持WebSocket
 worker_connections = 1000
 
 # 日志配置
-loglevel = "info"
+loglevel = "warning"  # 减少日志输出
 accesslog = "-"  # 输出到stdout
 errorlog = "-"   # 输出到stderr
 

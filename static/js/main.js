@@ -7,6 +7,7 @@ class TikTokAnalyticsDashboard {
         this.statusMessage = '';
         this.charts = {};
         this.isConnected = false;
+        this.authModalShown = false; // 授权弹窗状态
         
         this.init();
     }
@@ -558,6 +559,8 @@ class TikTokAnalyticsDashboard {
                 case 'need_auth':
                     statusElement.textContent = '需要授权';
                     statusElement.className = 'badge bg-info';
+                    // 自动弹出授权确认框
+                    this.showAuthorizationModal();
                     break;
                 case 'success':
                     statusElement.textContent = '已连接';
@@ -587,6 +590,28 @@ class TikTokAnalyticsDashboard {
         if (message) {
             console.log('Status message:', message);
         }
+    }
+    
+    showAuthorizationModal() {
+        // 避免重复弹出
+        if (this.authModalShown) {
+            return;
+        }
+        this.authModalShown = true;
+        
+        // 延迟3秒后弹出，避免过于突兀
+        setTimeout(() => {
+            const confirmed = confirm('🔐 检测到您还未授权TikTok账号！\n\n为了获取真实的数据分析，需要授权您的TikTok账号。\n\n点击"确定"开始授权，点击"取消"继续查看演示数据。');
+            
+            if (confirmed) {
+                this.authenticateWithTikTok();
+            } else {
+                // 用户选择取消，5分钟后可以再次提醒
+                setTimeout(() => {
+                    this.authModalShown = false;
+                }, 300000); // 5分钟
+            }
+        }, 3000);
     }
 }
 

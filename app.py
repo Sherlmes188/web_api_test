@@ -11,7 +11,28 @@ from config import Config
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'tiktok_analytics_secret_key'
-socketio = SocketIO(app, cors_allowed_origins="*")
+
+# 自适应SocketIO配置
+import os
+is_production = os.environ.get('RAILWAY_ENVIRONMENT') or os.environ.get('RENDER') or os.environ.get('HEROKU')
+
+if is_production:
+    # 生产环境：使用eventlet
+    socketio = SocketIO(app, 
+                       cors_allowed_origins="*",
+                       async_mode='eventlet',
+                       logger=False,
+                       engineio_logger=False,
+                       ping_timeout=60,
+                       ping_interval=25)
+else:
+    # 开发环境：自动检测最佳模式
+    socketio = SocketIO(app, 
+                       cors_allowed_origins="*",
+                       logger=True,
+                       engineio_logger=False,
+                       ping_timeout=60,
+                       ping_interval=25)
 
 # 为WSGI服务器提供应用入口点
 application = socketio
@@ -97,33 +118,36 @@ def update_data():
                 current_data = []
                 message = "请配置API密钥并授权TikTok账号"
                 status = 'need_config'
-            elif 'access_token' not in session:
-                current_data = []
-                message = "需要授权TikTok账号才能获取数据"
-                status = 'need_auth'
             else:
-                # 用户已授权，获取实际数据
-                try:
-                    from oauth_handler import TikTokOfficialAPI
-                    api = TikTokOfficialAPI(session['access_token'])
-                    
-                    # 获取用户视频数据
-                    videos_response = api.get_user_videos(count=20)
-                    if videos_response.get('data') and videos_response['data'].get('videos'):
-                        raw_videos = videos_response['data']['videos']
-                        current_data = api.process_video_analytics(raw_videos)
-                        message = f"成功获取 {len(current_data)} 个视频数据"
-                        status = 'success'
-                    else:
-                        current_data = []
-                        message = "暂无视频数据"
-                        status = 'no_data'
-                        
-                except Exception as e:
-                    print(f"获取官方API数据失败: {e}")
+                # 检查是否有访问令牌 - 使用全局存储避免session问题
+                access_token = getattr(app, '_access_token', None)
+                if not access_token:
                     current_data = []
-                    message = f"获取数据失败: {str(e)}"
-                    status = 'error'
+                    message = "需要授权TikTok账号才能获取数据"
+                    status = 'need_auth'
+                else:
+                    # 用户已授权，获取实际数据
+                    try:
+                        from oauth_handler import TikTokOfficialAPI
+                        api = TikTokOfficialAPI(access_token)
+                        
+                        # 获取用户视频数据
+                        videos_response = api.get_user_videos(count=20)
+                        if videos_response.get('data') and videos_response['data'].get('videos'):
+                            raw_videos = videos_response['data']['videos']
+                            current_data = api.process_video_analytics(raw_videos)
+                            message = f"成功获取 {len(current_data)} 个视频数据"
+                            status = 'success'
+                        else:
+                            current_data = []
+                            message = "暂无视频数据"
+                            status = 'no_data'
+                            
+                    except Exception as e:
+                        print(f"获取官方API数据失败: {e}")
+                        current_data = []
+                        message = f"获取数据失败: {str(e)}"
+                        status = 'error'
                 
         elif api_type == 'third_party':
             # 使用第三方API获取真实数据
@@ -317,10 +341,14 @@ def callback():
         print(f"Token响应: {token_data}")
         
         if 'access_token' in token_data:
-            # 保存访问令牌
+            # 保存访问令牌到session和app对象
             session['access_token'] = token_data['access_token']
             session['refresh_token'] = token_data.get('refresh_token')
             session['token_expires'] = token_data.get('expires_in', 3600)
+            
+            # 保存到app对象供WebSocket使用
+            app._access_token = token_data['access_token']
+            app._refresh_token = token_data.get('refresh_token')
             
             print(f"成功保存访问令牌: {token_data['access_token'][:20]}...")
             
@@ -379,6 +407,12 @@ def clear_config():
         session.pop('user_info', None)
         session.pop('oauth_state', None)
         session.pop('code_verifier', None)
+        
+        # 清除app对象中的访问令牌
+        if hasattr(app, '_access_token'):
+            delattr(app, '_access_token')
+        if hasattr(app, '_refresh_token'):
+            delattr(app, '_refresh_token')
         
         return jsonify({
             'success': True,
@@ -508,10 +542,14 @@ def manual_auth():
         print(f"Token Response: {token_data}")
         
         if 'access_token' in token_data:
-            # 保存访问令牌
+            # 保存访问令牌到session和app对象
             session['access_token'] = token_data['access_token']
             session['refresh_token'] = token_data.get('refresh_token')
             session['token_expires'] = token_data.get('expires_in', 3600)
+            
+            # 保存到app对象供WebSocket使用
+            app._access_token = token_data['access_token']
+            app._refresh_token = token_data.get('refresh_token')
             
             # 清除临时数据
             session.pop('oauth_state', None)
@@ -555,8 +593,9 @@ def auth_status():
         # 检查是否已配置客户端密钥
         if Config.has_official_api_config():
             status['configured'] = True
-            # 检查是否已获得access_token
-            if 'access_token' in session:
+            # 检查是否已获得access_token（session或app对象）
+            has_token = 'access_token' in session or hasattr(app, '_access_token')
+            if has_token:
                 status['authenticated'] = True
                 status['message'] = '已成功连接TikTok官方API'
             else:
