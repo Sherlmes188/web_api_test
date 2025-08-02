@@ -233,9 +233,9 @@ class TikTokOfficialAPI:
         Returns:
             视频列表响应
         """
-        print("使用POST方法调用/v2/video/list/，包含必需的fields参数...")
+        print("使用POST方法调用/v2/video/list/，fields作为查询参数...")
         
-        # 根据测试结果，/v2/video/list/ 需要POST方法和fields参数
+        # fields参数应该作为查询参数，就像用户信息API一样
         fields = [
             'id',
             'title',
@@ -245,25 +245,29 @@ class TikTokOfficialAPI:
             'duration'
         ]
         
-        # 构建请求体 - 根据400错误提示，fields是必需的
-        data = {
+        # 构建查询参数 - fields作为URL参数
+        params = {
             'fields': ','.join(fields)
         }
         
-        # 添加其他可选参数
+        # 构建POST请求体 - 其他参数
+        data = {}
+        
+        # 添加其他可选参数到请求体
         if count and count <= 20:
             data['max_count'] = count
         
         if cursor:
             data['cursor'] = cursor
         
-        print(f"调用Display API POST /v2/video/list/ with data: {data}")
+        print(f"调用Display API POST /v2/video/list/ with params: {params}, data: {data}")
         
         try:
             response = requests.post(
                 f"{self.base_url}/v2/video/list/",
                 headers=self.headers,
-                json=data  # 使用json而不是params，因为是POST请求
+                params=params,  # fields作为查询参数
+                json=data       # 其他参数作为请求体
             )
             print(f"API响应状态码: {response.status_code}")
             print(f"API响应内容: {response.text[:500]}...")
@@ -469,22 +473,27 @@ class TikTokOfficialAPI:
         
         # 测试修复后的视频列表端点 - 包含正确的fields参数
         try:
-            # 测试修复后的POST /v2/video/list/ 方法
-            video_data = {
-                'fields': 'id,title,create_time,cover_image_url,share_url,duration',
+            # 测试修复后的POST /v2/video/list/ 方法 - fields作为查询参数
+            params = {
+                'fields': 'id,title,create_time,cover_image_url,share_url,duration'
+            }
+            
+            data = {
                 'max_count': 10
             }
             
             video_response = requests.post(
                 f"{self.base_url}/v2/video/list/",
                 headers=self.headers,
-                json=video_data
+                params=params,  # fields作为查询参数
+                json=data       # 其他参数作为请求体
             )
             
             test_results['fixed_video_list'] = {
                 'method': 'POST',
                 'endpoint': '/v2/video/list/',
-                'data': video_data,
+                'params': params,
+                'data': data,
                 'status_code': video_response.status_code,
                 'success': video_response.status_code == 200,
                 'response': video_response.text[:400]
@@ -498,20 +507,24 @@ class TikTokOfficialAPI:
         
         # 也测试video/query端点
         try:
-            query_data = {
+            params = {
                 'fields': 'id,title,create_time,cover_image_url,share_url,duration'
             }
+            
+            data = {}  # query端点可能不需要额外的body参数
             
             query_response = requests.post(
                 f"{self.base_url}/v2/video/query/",
                 headers=self.headers,
-                json=query_data
+                params=params,  # fields作为查询参数
+                json=data
             )
             
             test_results['fixed_video_query'] = {
                 'method': 'POST',
                 'endpoint': '/v2/video/query/',
-                'data': query_data,
+                'params': params,
+                'data': data,
                 'status_code': query_response.status_code,
                 'success': query_response.status_code == 200,
                 'response': query_response.text[:400]
