@@ -672,45 +672,7 @@ def handle_request_update():
     """处理客户端请求数据更新"""
     update_data()
 
-def convert_analytics_to_display_format(analytics_data):
-    """将API数据转换为显示格式"""
-    display_data = []
-    
-    for item in analytics_data:
-        # 安全地获取数据字段
-        video_id = item.get('video_id', '')
-        author = item.get('author', '')
-        publish_time = item.get('publish_time')
-        
-        # 生成视频链接
-        if video_id and author:
-            video_link = f"https://www.tiktok.com/@{author}/video/{video_id}"
-        else:
-            video_link = "链接不可用"
-        
-        # 格式化发布时间
-        if isinstance(publish_time, datetime.datetime):
-            publish_date = publish_time.strftime('%Y/%m/%d')
-        else:
-            publish_date = datetime.datetime.now().strftime('%Y/%m/%d')
-        
-        display_item = {
-            'video_link': video_link,
-            'product': '内容创作',  # 可以根据实际情况设置
-            'service': 'TikTok',
-            'publish_date': publish_date,
-            'views': item.get('views', 0),
-            'avg_watch_time': round(item.get('avg_watch_time', 0), 1),
-            'new_followers': item.get('new_followers', 0),
-            'completion_rate': f"{item.get('completion_rate', 0):.1f}%",
-            'bounce_rate': round(item.get('bounce_rate', 0), 2),
-            'watch_duration': f"{item.get('avg_watch_time', 0):.1f}s",
-            'gmv_max_views': '分析中',
-            'performance': 1 if item.get('engagement_rate', 0) > 5 else 0
-        }
-        display_data.append(display_item)
-    
-    return display_data
+
 
 def generate_sample_data_with_note(note="模拟数据"):
     """生成带说明的示例数据"""

@@ -166,8 +166,8 @@ body {
     color: white;
 }
 
-/* 产品标签样式 */
-.product-tag {
+/* 作者标签样式 */
+.author-tag {
     background-color: #e9ecef;
     color: #495057;
     padding: 0.3rem 0.6rem;

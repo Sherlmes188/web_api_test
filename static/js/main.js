@@ -229,19 +229,20 @@ class TikTokAnalyticsDashboard {
             : `${item.completion_rate}%`;
 
         // 格式化发布时间
-        const publishDate = item.publish_time ? 
-            new Date(item.publish_time).toLocaleDateString('zh-CN') : 
-            '未知时间';
-
+        const publishDate = this.formatPublishTime(item.publish_time);
+        
+        // 格式化视频链接
+        const videoUrl = item.share_url || this.generateVideoUrl(item.video_id, item.author);
+        
         // 显示真实的API数据
         row.innerHTML = `
             <td>
-                <a href="${item.share_url || '#'}" target="_blank" class="video-link">
-                    ${this.truncateUrl(item.share_url)}
+                <a href="${videoUrl}" target="_blank" class="video-link">
+                    ${this.truncateUrl(videoUrl)}
                 </a>
             </td>
             <td>
-                <span class="product-tag">${item.author || '当前用户'}</span>
+                <span class="author-tag">${item.author || '当前用户'}</span>
             </td>
             <td>${publishDate}</td>
             <td class="number-cell">${this.formatNumber(item.views || 0)}</td>
@@ -482,6 +483,39 @@ class TikTokAnalyticsDashboard {
             return (num / 1000).toFixed(1) + 'K';
         }
         return num.toString();
+    }
+
+    formatPublishTime(publishTime) {
+        if (!publishTime) return '未知时间';
+        
+        try {
+            // 处理不同的时间格式
+            let date;
+            if (typeof publishTime === 'string') {
+                date = new Date(publishTime);
+            } else if (typeof publishTime === 'number') {
+                // Unix时间戳
+                date = new Date(publishTime * 1000);
+            } else {
+                date = new Date(publishTime);
+            }
+            
+            if (isNaN(date.getTime())) {
+                return '未知时间';
+            }
+            
+            return date.toLocaleDateString('zh-CN');
+        } catch (error) {
+            console.error('Failed to format publish time:', error);
+            return '未知时间';
+        }
+    }
+
+    generateVideoUrl(videoId, author) {
+        if (videoId && author) {
+            return `https://www.tiktok.com/@${author}/video/${videoId}`;
+        }
+        return '#';
     }
 
     truncateUrl(url) {
