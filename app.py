@@ -124,6 +124,8 @@ def update_data():
                         
                         # 获取用户视频数据
                         videos_response = api.get_user_videos(count=20)
+                        
+                        # Display API的响应格式: {"data": {"videos": [...], "cursor": ..., "has_more": bool}, "error": {...}}
                         if videos_response.get('data') and videos_response['data'].get('videos'):
                             raw_videos = videos_response['data']['videos']
                             current_data = api.process_video_analytics(raw_videos)
@@ -133,7 +135,6 @@ def update_data():
                             current_data = []
                             message = "暂无视频数据"
                             status = 'no_data'
-                            
                     except Exception as e:
                         print(f"获取官方API数据失败: {e}")
                         current_data = []

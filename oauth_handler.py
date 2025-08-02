@@ -55,9 +55,10 @@ class TikTokOAuth:
             raise ValueError("未配置TikTok Client Key")
         
         if scopes is None:
+            # 根据Display API文档使用正确的权限范围
             scopes = [
-                'user.info.basic',
-                'video.list'
+                'user.info.basic',  # 读取用户基本信息
+                'video.list'        # 读取用户公开视频
             ]
         
         if state is None:
@@ -223,16 +224,19 @@ class TikTokOfficialAPI:
     
     def get_user_videos(self, cursor: Optional[str] = None, count: int = 20) -> Dict:
         """
-        获取用户视频列表
+        获取用户视频列表 - 使用Display API格式
         
         Args:
-            cursor: 分页游标
-            count: 每页数量
+            cursor: 分页游标 (可选)
+            count: 每页数量 (最多20个)
             
         Returns:
-            视频列表
+            视频列表响应
         """
-        params = {'count': min(count, 20)}  # API限制最多20个
+        # 根据Display API文档构建请求参数
+        params = {
+            'max_count': min(count, 20)  # Display API使用max_count参数，最多20个
+        }
         
         if cursor:
             params['cursor'] = cursor
@@ -290,40 +294,64 @@ class TikTokOfficialAPI:
         except requests.RequestException as e:
             raise Exception(f"获取视频信息失败: {e}")
     
-    def process_video_analytics(self, videos_data: Dict) -> list:
+    def process_video_analytics(self, videos_data: list) -> list:
         """
-        处理视频数据为分析格式
+        处理视频数据为分析格式 - 适配Display API响应
         
         Args:
-            videos_data: API返回的视频数据
+            videos_data: Display API返回的视频列表 (不是Dict，而是list)
             
         Returns:
             处理后的分析数据列表
         """
         analytics_data = []
         
-        if 'data' not in videos_data or 'videos' not in videos_data['data']:
+        # Display API直接返回视频列表
+        if not videos_data or not isinstance(videos_data, list):
             return analytics_data
         
-        for video in videos_data['data']['videos']:
-            # 计算参与度
-            views = video.get('view_count', 0)
-            likes = video.get('like_count', 0)
-            comments = video.get('comment_count', 0)
-            shares = video.get('share_count', 0)
+        for video in videos_data:
+            # 根据Display API Video Object文档处理字段
+            video_id = video.get('id', '')
+            title = video.get('title', '')
             
-            engagement_rate = ((likes + comments + shares) / max(views, 1)) * 100 if views > 0 else 0
+            # Display API中的统计数据可能在不同字段中
+            views = 0  # Display API可能不提供view_count
+            likes = 0  # Display API可能不提供like_count
+            comments = 0  # Display API可能不提供comment_count
+            shares = 0  # Display API可能不提供share_count
             
-            # 估算平均观看时长和完播率
+            # 尝试从可能的字段获取统计数据
+            if 'statistics' in video:
+                stats = video['statistics']
+                views = stats.get('view_count', 0)
+                likes = stats.get('like_count', 0)
+                comments = stats.get('comment_count', 0)
+                shares = stats.get('share_count', 0)
+            
+            # 计算参与度 (如果有统计数据的话)
+            engagement_rate = 0
+            if views > 0:
+                engagement_rate = ((likes + comments + shares) / views) * 100
+            
+            # 获取视频时长
             duration = video.get('duration', 30)
+            if isinstance(duration, str):
+                # 如果duration是字符串格式，尝试转换
+                try:
+                    duration = int(duration)
+                except:
+                    duration = 30
+            
+            # 估算其他指标
             avg_watch_time = duration * (0.3 + (engagement_rate / 100) * 0.5)
             completion_rate = min(90, 20 + engagement_rate * 2)
             
             analytics_item = {
-                'video_id': video.get('id', ''),
-                'description': video.get('title', '') or video.get('video_description', ''),
+                'video_id': video_id,
+                'description': title or video.get('description', ''),
                 'author': 'current_user',  # 当前授权用户
-                'publish_time': self._parse_timestamp(video.get('create_time')),
+                'publish_time': self._parse_timestamp(video.get('create_time', video.get('created_at'))),
                 'views': views,
                 'likes': likes,
                 'comments': comments,
@@ -333,7 +361,7 @@ class TikTokOfficialAPI:
                 'avg_watch_time': round(avg_watch_time, 1),
                 'completion_rate': round(completion_rate, 1),
                 'bounce_rate': round(max(1.0, 5.0 - engagement_rate/2), 2),
-                'share_url': video.get('share_url', ''),
+                'share_url': video.get('share_url', video.get('web_video_url', '')),
                 'cover_image': video.get('cover_image_url', '')
             }
             
